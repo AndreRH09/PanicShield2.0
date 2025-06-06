@@ -6,21 +6,33 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.panicshield.domain.model.AuthResult
-import com.example.panicshield.domain.model.AuthState
-import com.example.panicshield.domain.usecase.AuthUseCase
+import com.example.panicshield.domain.usecase.IsLoggedInUseCase
+import com.example.panicshield.domain.usecase.LoginUseCase
+import com.example.panicshield.domain.usecase.LogoutUseCase
+import com.example.panicshield.domain.usecase.RegisterUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class AuthUiState(
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val isLoggedIn: Boolean = false
+)
+
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val authUseCase: AuthUseCase
+    private val loginUseCase: LoginUseCase,
+    private val registerUseCase: RegisterUseCase,
+    private val logoutUseCase: LogoutUseCase,
+    private val isLoggedInUseCase: IsLoggedInUseCase
 ) : ViewModel() {
 
-    private val _authState = MutableStateFlow(AuthState())
-    val authState = _authState.asStateFlow()
+    private val _uiState = MutableStateFlow(AuthUiState())
+    val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     var email by mutableStateOf("")
         private set
@@ -31,18 +43,8 @@ class AuthViewModel @Inject constructor(
     var confirmPassword by mutableStateOf("")
         private set
 
-    var displayName by mutableStateOf("")
-        private set
-
     init {
-        viewModelScope.launch {
-            authUseCase.getAuthState().collect { isAuthenticated ->
-                _authState.value = _authState.value.copy(
-                    isAuthenticated = isAuthenticated,
-                    user = if (isAuthenticated) authUseCase.getCurrentUser() else null
-                )
-            }
-        }
+        checkLoginStatus()
     }
 
     fun updateEmail(newEmail: String) {
@@ -60,75 +62,85 @@ class AuthViewModel @Inject constructor(
         clearError()
     }
 
-    fun updateDisplayName(newDisplayName: String) {
-        displayName = newDisplayName
-        clearError()
-    }
-
-    fun signIn() {
+    fun login() {
         viewModelScope.launch {
-            _authState.value = _authState.value.copy(isLoading = true, error = null)
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            when (val result = authUseCase.signIn(email, password)) {
+            when (val result = loginUseCase(email, password)) {
                 is AuthResult.Success -> {
-                    _authState.value = _authState.value.copy(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        isAuthenticated = true,
-                        user = result.user,
-                        error = null
+                        isLoggedIn = true,
+                        errorMessage = null
                     )
                     clearFields()
                 }
                 is AuthResult.Error -> {
-                    _authState.value = _authState.value.copy(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = result.message
+                        errorMessage = getErrorMessage(result.error.errorCode, result.error.message)
                     )
                 }
                 is AuthResult.Loading -> {
-                    // Already handled above
+                    _uiState.value = _uiState.value.copy(isLoading = result.isLoading)
                 }
             }
         }
     }
 
-    fun signUp() {
-        viewModelScope.launch {
-            _authState.value = _authState.value.copy(isLoading = true, error = null)
+    fun register() {
+        if (password != confirmPassword) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Las contraseñas no coinciden")
+            return
+        }
 
-            when (val result = authUseCase.signUp(email, password, displayName, confirmPassword)) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+
+            when (val result = registerUseCase(email, password)) {
                 is AuthResult.Success -> {
-                    _authState.value = _authState.value.copy(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        isAuthenticated = true,
-                        user = result.user,
-                        error = null
+                        errorMessage = null
                     )
                     clearFields()
+                    // Mostrar mensaje de éxito - el usuario necesita verificar su email
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Registro exitoso. Por favor verifica tu email."
+                    )
                 }
                 is AuthResult.Error -> {
-                    _authState.value = _authState.value.copy(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        error = result.message
+                        errorMessage = getErrorMessage(result.error.errorCode, result.error.message)
                     )
                 }
                 is AuthResult.Loading -> {
-                    // Already handled above
+                    _uiState.value = _uiState.value.copy(isLoading = result.isLoading)
                 }
             }
         }
     }
 
-    fun signOut() {
+    fun logout() {
         viewModelScope.launch {
-            authUseCase.signOut()
+            logoutUseCase()
+            _uiState.value = _uiState.value.copy(isLoggedIn = false)
             clearFields()
         }
     }
 
+    private fun checkLoginStatus() {
+        viewModelScope.launch {
+            isLoggedInUseCase().collect { isLoggedIn ->
+                _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
+            }
+        }
+    }
+
     private fun clearError() {
-        if (_authState.value.error != null) {
-            _authState.value = _authState.value.copy(error = null)
+        if (_uiState.value.errorMessage != null) {
+            _uiState.value = _uiState.value.copy(errorMessage = null)
         }
     }
 
@@ -136,6 +148,16 @@ class AuthViewModel @Inject constructor(
         email = ""
         password = ""
         confirmPassword = ""
-        displayName = ""
+    }
+
+    private fun getErrorMessage(errorCode: String, originalMessage: String): String {
+        return when (errorCode) {
+            "email_address_invalid" -> "El email ingresado no es válido"
+            "weak_password" -> "La contraseña debe tener al menos 6 caracteres"
+            "invalid_credentials" -> "Email o contraseña incorrectos"
+            "network_error" -> "Error de conexión. Verifica tu internet"
+            "invalid_input" -> "Email o contraseña inválidos"
+            else -> originalMessage
+        }
     }
 }

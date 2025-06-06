@@ -11,8 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.rememberNavController
-import com.example.panicshield.ui.navigation.Navigation
+import com.example.panicshield.ui.navigation.AppNavigation
 import com.example.panicshield.ui.theme.PanicShieldTheme
+
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.HiltAndroidApp
 
@@ -23,7 +24,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PanicShieldTheme {
-                Navigation() // ¡Solo esto!
+                AppNavigation() // ¡Solo esto!
             }
         }
     }

@@ -1,5 +1,5 @@
 package com.example.panicshield.di
-
+/*
 import android.content.Context
 import com.example.panicshield.data.repository.AuthRepository
 import com.example.panicshield.data.repository.AuthRepositoryImpl
@@ -47,4 +47,4 @@ object AppModule {
         auth: FirebaseAuth,
         firestore: FirebaseFirestore
     ): AuthRepository = AuthRepositoryImpl(auth, firestore)
-}
+}*/
