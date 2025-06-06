@@ -71,14 +71,14 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "ALARMAS",
+            text = "PANIC SHIELD",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFFE53E3E)
         )
 
         Text(
-            text = "WAXER SYSTEM",
+            text = "App boton de panico",
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             color = Color.Gray

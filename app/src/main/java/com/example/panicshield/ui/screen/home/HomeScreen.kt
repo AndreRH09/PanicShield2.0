@@ -13,29 +13,14 @@ import com.example.panicshield.ui.screen.home.components.HomeBottomNavigation
 import com.example.panicshield.ui.screen.home.components.PanicButtonContent
 
 @Composable
-fun HomeScreen(
-    onLogout: () -> Unit,
-    authViewModel: AuthViewModel = hiltViewModel()
-) {
-    val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
-
-    // Si no está logueado, volver al login
-    LaunchedEffect(uiState.isLoggedIn) {
-        if (!uiState.isLoggedIn) {
-            onLogout()
-        }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize()
+fun HomeScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        // Top Bar
-        //HomeTopBar(onLogout = { authViewModel.logout() })
-
-        // Contenido principal
-        PanicButtonContent()
-
-        // Bottom Navigation
-        HomeBottomNavigation()
+        Text(
+            text = "Boton de panico",
+            style = MaterialTheme.typography.headlineMedium
+        )
     }
 }

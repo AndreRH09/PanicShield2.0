@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.panicshield.data.local.TokenManager
 import com.example.panicshield.data.remote.api.AuthApi
 import com.example.panicshield.data.remote.api.ApiConstants
+import com.example.panicshield.data.remote.api.ContactApi
 
 import com.example.panicshield.data.repository.AuthRepository
 import com.google.gson.Gson
@@ -86,5 +87,11 @@ object NetworkModule {
         gson: Gson
     ): AuthRepository {
         return AuthRepository(authApi, tokenManager, gson)
+    }
+
+    @Provides
+    @Singleton
+    fun provideContactApi(retrofit: Retrofit): ContactApi {
+        return retrofit.create(ContactApi::class.java)
     }
 }

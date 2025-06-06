@@ -94,9 +94,7 @@ fun MainNavigation(
                 .padding(innerPadding)
         ) {
             composable(MainScreen.Home.route) {
-                HomeScreen(
-                    onLogout = onLogout
-                )
+                HomeScreen()
             }
 
             composable(MainScreen.Map.route) {
