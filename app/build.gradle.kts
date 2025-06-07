@@ -124,6 +124,14 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.2.2")
     implementation("androidx.compose.material:material-icons-extended:1.3.1")
 
-     // Coroutines
-    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Location Services
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.gms:play-services-maps:18.2.0")
+
+    // Permissions
+    implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+
 }

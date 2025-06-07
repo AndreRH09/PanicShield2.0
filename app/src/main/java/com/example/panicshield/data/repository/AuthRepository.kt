@@ -1,117 +1,127 @@
 package com.example.panicshield.data.repository
 
+import com.google.gson.Gson
+import com.example.panicshield.data.local.TokenManager
+import com.example.panicshield.data.remote.api.AuthApi
+import com.example.panicshield.data.remote.api.ApiConstants
+import com.example.panicshield.data.remote.dto.AuthErrorDto
+import com.example.panicshield.data.remote.dto.toDomain
+import com.example.panicshield.domain.model.AuthError
+import com.example.panicshield.domain.model.AuthResponse
 import com.example.panicshield.domain.model.AuthResult
+import com.example.panicshield.domain.model.LoginRequest
+import com.example.panicshield.domain.model.RegisterRequest
 import com.example.panicshield.domain.model.User
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
-interface AuthRepository {
-    fun getAuthState(): Flow<Boolean>
-    suspend fun signIn(email: String, password: String): AuthResult
-    suspend fun signUp(email: String, password: String, displayName: String): AuthResult
-    suspend fun signOut()
-    fun getCurrentUser(): User?
-}
-
 @Singleton
-class AuthRepositoryImpl @Inject constructor(
-    private val auth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
-) : AuthRepository {
+class AuthRepository @Inject constructor(
+    private val authApi: AuthApi,
+    private val tokenManager: TokenManager,
+    private val gson: Gson
+) {
 
-    override fun getAuthState(): Flow<Boolean> = callbackFlow {
-        val authStateListener = FirebaseAuth.AuthStateListener { auth ->
-            trySend(auth.currentUser != null)
-        }
-        auth.addAuthStateListener(authStateListener)
-        awaitClose {
-            auth.removeAuthStateListener(authStateListener)
-        }
-    }
-
-    override suspend fun signIn(email: String, password: String): AuthResult {
+    suspend fun register(email: String, password: String): AuthResult<User> {
         return try {
-            val result = auth.signInWithEmailAndPassword(email, password).await()
-            val firebaseUser = result.user
-            if (firebaseUser != null) {
-                val user = getUserFromFirestore(firebaseUser.uid) ?: firebaseUser.toUser()
-                AuthResult.Success(user)
+            val response = authApi.register(
+                apiKey = ApiConstants.API_KEY,
+                request = RegisterRequest(email, password)
+            )
+
+            if (response.isSuccessful) {
+                response.body()?.let { registerResponse ->
+                    AuthResult.Success(registerResponse.toDomain())
+                } ?: AuthResult.Error(AuthError(0, "unknown_error", "Unknown error occurred"))
             } else {
-                AuthResult.Error("Error al iniciar sesión")
-            }
-        } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Error desconocido")
-        }
-    }
+                val errorBody = response.errorBody()?.string()
+                val authError = try {
+                    gson.fromJson(errorBody, AuthErrorDto::class.java)
+                } catch (e: Exception) {
+                    AuthErrorDto(response.code(), "unknown_error", "Unknown error occurred")
+                }
 
-    override suspend fun signUp(email: String, password: String, displayName: String): AuthResult {
-        return try {
-            val result = auth.createUserWithEmailAndPassword(email, password).await()
-            val firebaseUser = result.user
-            if (firebaseUser != null) {
-                val user = User(
-                    uid = firebaseUser.uid,
-                    email = email,
-                    displayName = displayName,
-                    createdAt = System.currentTimeMillis()
+                AuthResult.Error(
+                    AuthError(
+                        code = authError.code,
+                        errorCode = authError.errorCode,
+                        message = authError.msg
+                    )
                 )
-
-                // Guardar usuario en Firestore
-                saveUserToFirestore(user)
-
-                AuthResult.Success(user)
-            } else {
-                AuthResult.Error("Error al crear la cuenta")
             }
         } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Error desconocido")
+            AuthResult.Error(
+                AuthError(
+                    code = 0,
+                    errorCode = "network_error",
+                    message = e.message ?: "Network error occurred"
+                )
+            )
         }
     }
 
-    override suspend fun signOut() {
-        auth.signOut()
-    }
-
-    override fun getCurrentUser(): User? {
-        return auth.currentUser?.toUser()
-    }
-
-    private suspend fun saveUserToFirestore(user: User) {
-        try {
-            firestore.collection("users")
-                .document(user.uid)
-                .set(user)
-                .await()
-        } catch (e: Exception) {
-            // Log error but don't throw, user is already created in Auth
-        }
-    }
-
-    private suspend fun getUserFromFirestore(uid: String): User? {
+    suspend fun login(email: String, password: String): AuthResult<AuthResponse> {
         return try {
-            val document = firestore.collection("users")
-                .document(uid)
-                .get()
-                .await()
-            document.toObject(User::class.java)
+            val response = authApi.login(
+                apiKey = ApiConstants.API_KEY,
+                request = LoginRequest(email, password)
+            )
+
+            if (response.isSuccessful) {
+                response.body()?.let { authResponse ->
+                    val domainResponse = authResponse.toDomain()
+
+                    // Guardar tokens en DataStore
+                    tokenManager.saveTokens(
+                        accessToken = domainResponse.accessToken,
+                        refreshToken = domainResponse.refreshToken,
+                        userId = domainResponse.user.id,
+                        userEmail = domainResponse.user.email
+                    )
+
+                    AuthResult.Success(domainResponse)
+                } ?: AuthResult.Error(AuthError(0, "unknown_error", "Unknown error occurred"))
+            } else {
+                val errorBody = response.errorBody()?.string()
+                val authError = try {
+                    gson.fromJson(errorBody, AuthErrorDto::class.java)
+                } catch (e: Exception) {
+                    AuthErrorDto(response.code(), "unknown_error", "Unknown error occurred")
+                }
+
+                AuthResult.Error(
+                    AuthError(
+                        code = authError.code,
+                        errorCode = authError.errorCode,
+                        message = authError.msg
+                    )
+                )
+            }
         } catch (e: Exception) {
-            null
+            AuthResult.Error(
+                AuthError(
+                    code = 0,
+                    errorCode = "network_error",
+                    message = e.message ?: "Network error occurred"
+                )
+            )
         }
     }
 
-    private fun FirebaseUser.toUser(): User {
-        return User(
-            uid = uid,
-            email = email ?: "",
-            displayName = displayName ?: "",
-            phoneNumber = phoneNumber ?: ""
-        )
+    suspend fun logout() {
+        tokenManager.clearTokens()
+    }
+
+    fun isLoggedIn(): Flow<Boolean> {
+        return tokenManager.isLoggedIn()
+    }
+
+    fun getUserId(): Flow<String?> {
+        return tokenManager.getUserId()
+    }
+
+    fun getUserEmail(): Flow<String?> {
+        return tokenManager.getUserEmail()
     }
 }

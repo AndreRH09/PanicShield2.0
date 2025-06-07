@@ -1,5 +1,6 @@
 package com.example.panicshield.utils
 
+/*
 object NavigationRoutes {
     const val LOGIN = "login"
     const val HOME = "home"
@@ -8,3 +9,4 @@ object NavigationRoutes {
     const val HISTORY = "history"
     const val SETTINGS = "settings"
 }
+*/

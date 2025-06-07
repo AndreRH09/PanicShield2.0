@@ -242,6 +242,7 @@ private fun createCircleLayer(): CircleLayer {
         )
         circleStrokeColor("white")
         circleStrokeWidth(0.1)
+
     }
 }
 
