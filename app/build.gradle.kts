@@ -54,6 +54,10 @@ android {
 
 dependencies {
 
+    // Map Box
+    implementation("com.mapbox.maps:android:11.12.2")
+    implementation("com.mapbox.extension:maps-compose:11.12.2")
+
     // Core Android
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
