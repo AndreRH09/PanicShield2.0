@@ -5,8 +5,12 @@ import com.example.panicshield.data.local.TokenManager
 import com.example.panicshield.data.remote.api.AuthApi
 import com.example.panicshield.data.remote.api.ApiConstants
 import com.example.panicshield.data.remote.api.ContactApi
+import com.example.panicshield.data.remote.api.EmergencyApi
 
 import com.example.panicshield.data.repository.AuthRepository
+import com.example.panicshield.data.repository.EmergencyRepository
+import com.example.panicshield.domain.usecase.EmergencyUseCase
+import com.example.panicshield.domain.usecase.LocationUseCase
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import dagger.Module
@@ -72,6 +76,11 @@ object NetworkModule {
     fun provideAuthApi(retrofit: Retrofit): AuthApi {
         return retrofit.create(AuthApi::class.java)
     }
+    @Provides
+    @Singleton
+    fun provideEmergencyApi(retrofit: Retrofit): EmergencyApi {
+        return retrofit.create(EmergencyApi::class.java)
+    }
 
     @Provides
     @Singleton
@@ -94,4 +103,33 @@ object NetworkModule {
     fun provideContactApi(retrofit: Retrofit): ContactApi {
         return retrofit.create(ContactApi::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideEmergencyRepository(
+        emergencyApi: EmergencyApi,
+        tokenManager: TokenManager
+    ): EmergencyRepository {
+        return EmergencyRepository(emergencyApi)
+    }
+
+    // ===== USE CASES =====
+
+    // ✅ AGREGAR ESTE - EmergencyUseCase
+    @Provides
+    @Singleton
+    fun provideEmergencyUseCase(
+        emergencyRepository: EmergencyRepository,
+        tokenManager: TokenManager
+    ): EmergencyUseCase {
+        return EmergencyUseCase(emergencyRepository)
+    }
+
+    // ✅ AGREGAR ESTE - LocationUseCase
+    @Provides
+    @Singleton
+    fun provideLocationUseCase(): LocationUseCase {
+        return LocationUseCase()
+    }
+
 }
