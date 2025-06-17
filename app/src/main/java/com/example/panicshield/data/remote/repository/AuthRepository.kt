@@ -1,4 +1,4 @@
-package com.example.panicshield.data.repository
+package com.example.panicshield.data.remote.repository
 
 import com.google.gson.Gson
 import com.example.panicshield.data.local.TokenManager

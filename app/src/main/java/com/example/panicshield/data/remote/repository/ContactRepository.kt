@@ -1,4 +1,4 @@
-package com.example.panicshield.data.repository
+package com.example.panicshield.data.remote.repository
 
 import android.content.Context
 import android.provider.ContactsContract

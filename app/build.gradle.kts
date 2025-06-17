@@ -58,6 +58,12 @@ dependencies {
     implementation("com.mapbox.maps:android:11.12.2")
     implementation("com.mapbox.extension:maps-compose:11.12.2")
 
+    // Supabase
+
+
+    // Ktor (necesario para Supabase)
+    implementation("io.ktor:ktor-client-android:2.3.7")
+
     // Core Android
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

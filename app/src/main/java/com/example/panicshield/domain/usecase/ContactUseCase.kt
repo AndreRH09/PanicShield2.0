@@ -1,6 +1,6 @@
 package com.example.panicshield.domain.usecase
 
-import com.example.panicshield.data.repository.ContactRepository
+import com.example.panicshield.data.remote.repository.ContactRepository
 import com.example.panicshield.domain.model.Contact
 import com.example.panicshield.domain.model.PhoneContact
 import javax.inject.Inject

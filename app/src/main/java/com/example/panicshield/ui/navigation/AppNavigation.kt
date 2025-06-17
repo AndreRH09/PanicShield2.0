@@ -11,6 +11,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.panicshield.ui.screen.auth.AuthViewModel
 
+
 sealed class AppScreen(val route: String) {
     object Auth : AppScreen("auth")
     object Main : AppScreen("main")

@@ -2,11 +2,12 @@ package com.example.panicshield.di
 
 import android.content.Context
 import com.example.panicshield.data.local.TokenManager
+import com.example.panicshield.data.remote.api.EmergencyApi
 import com.example.panicshield.data.remote.api.AuthApi
 import com.example.panicshield.data.remote.api.ApiConstants
 import com.example.panicshield.data.remote.api.ContactApi
 
-import com.example.panicshield.data.repository.AuthRepository
+import com.example.panicshield.data.remote.repository.AuthRepository
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import dagger.Module
@@ -93,5 +94,11 @@ object NetworkModule {
     @Singleton
     fun provideContactApi(retrofit: Retrofit): ContactApi {
         return retrofit.create(ContactApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAlertApi(retrofit: Retrofit): EmergencyApi {
+        return retrofit.create(EmergencyApi::class.java)
     }
 }

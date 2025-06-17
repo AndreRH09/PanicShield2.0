@@ -28,6 +28,7 @@ import com.example.panicshield.ui.screen.map.MapScreen
 import com.example.panicshield.ui.screen.contacts.ContactsScreen
 import com.example.panicshield.ui.screen.history.HistoryScreen
 import com.example.panicshield.ui.screen.settings.SettingsScreen
+import com.example.panicshield.data.local.TokenManager
 
 sealed class MainScreen(val route: String, val title: String, val icon: ImageVector) {
     object Home : MainScreen("home", "Inicio", Icons.Default.Home)
@@ -41,6 +42,7 @@ sealed class MainScreen(val route: String, val title: String, val icon: ImageVec
 fun MainNavigation(
     navController: NavHostController = rememberNavController(),
     onLogout: () -> Unit
+
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
