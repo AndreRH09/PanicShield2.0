@@ -1,35 +1,47 @@
 package com.example.panicshield.domain.usecase
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.location.LocationManager
 import com.example.panicshield.domain.model.LocationInfo
+import com.google.android.gms.location.LocationServices
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class LocationUseCase @Inject constructor(
-    // Aquí inyectarías tu LocationRepository cuando lo tengas
+    @ApplicationContext private val context: Context
 ) {
 
     private val _currentLocation = MutableStateFlow<LocationInfo?>(null)
+    private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
     // ✅ SOLUCION: Solo una función pública, sin propiedad conflictiva
     fun getCurrentLocation(): Flow<LocationInfo?> {
         return _currentLocation.asStateFlow()
     }
 
+    @SuppressLint("MissingPermission")
     suspend fun updateLocation() {
-        // TODO: Implementar obtención de ubicación real
-        // Por ahora devolvemos una ubicación mock para Lima, Perú
-        _currentLocation.value = LocationInfo(
-            latitude = -12.0464,
-            longitude = -77.0428,
-            accuracy = 10.0f,
-            address = "Lima, Perú",
-            timestamp = System.currentTimeMillis(),
-            isLocationActive = true
-        )
+        try {
+            val location = fusedLocationClient.lastLocation.await()
+            location?.let {
+                _currentLocation.value = LocationInfo(
+                    latitude = it.latitude,
+                    longitude = it.longitude,
+                    accuracy = it.accuracy,
+                    timestamp = it.time,
+                    isLocationActive = true
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun requestLocationPermission(): Boolean {
@@ -38,8 +50,9 @@ class LocationUseCase @Inject constructor(
     }
 
     fun isLocationEnabled(): Boolean {
-        // TODO: Implementar verificación de GPS
-        return true
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
     }
 
     fun clearLocation() {

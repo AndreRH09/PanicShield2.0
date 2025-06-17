@@ -8,6 +8,8 @@ import com.example.panicshield.domain.usecase.EmergencyUseCase
 import com.example.panicshield.domain.usecase.LocationUseCase
 import com.example.panicshield.domain.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -21,6 +23,7 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(HomeUIState())
     val uiState: StateFlow<HomeUIState> = _uiState.asStateFlow()
+    private val _connectivityJob = MutableStateFlow<Job?>(null)
 
     private val _locationInfo = MutableStateFlow<LocationInfo?>(null)
     val locationInfo: StateFlow<LocationInfo?> = _locationInfo.asStateFlow()
@@ -318,14 +321,105 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun retryConnection() {
-        viewModelScope.launch {
-            checkForActiveEmergency()
+
+
+
+    // ✅ NUEVA FUNCIÓN: Monitoreo de conectividad con suspend
+    fun startConnectivityMonitoring() {
+        // Cancelar job anterior si existe
+        _connectivityJob.value?.cancel()
+
+        val job = viewModelScope.launch {
+            while (true) {
+                checkNetworkConnectivity()
+                delay(5000) // Verificar cada 5 segundos
+            }
+        }
+        _connectivityJob.value = job
+    }
+
+    // ✅ NUEVA FUNCIÓN: Verificar conectividad de red
+    private suspend fun checkNetworkConnectivity() {
+        val token = _currentAccessToken.value
+        val userId = _currentUserId.value
+
+        _uiState.value = _uiState.value.copy(
+            connectionStatus = ConnectionStatus.CONNECTING
+        )
+
+        try {
+            if (token == null || userId == null) {
+                _uiState.value = _uiState.value.copy(
+                    connectionStatus = ConnectionStatus.ERROR,
+                    errorMessage = "No hay credenciales de autenticación"
+                )
+                return
+            }
+
+            // ✅ USAR SUSPEND para verificar conectividad
+            when (val result = emergencyUseCase.testConnection(token, userId)) {
+                is EmergencyResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        connectionStatus = ConnectionStatus.CONNECTED,
+                        networkAvailable = true,
+                        errorMessage = null
+                    )
+                }
+                is EmergencyResult.Error -> {
+                    val connectionStatus = when {
+                        result.exception.message?.contains("UnknownHostException") == true ||
+                                result.exception.message?.contains("ConnectException") == true ->
+                            ConnectionStatus.DISCONNECTED
+
+                        result.exception.message?.contains("SocketTimeoutException") == true ||
+                                result.exception.message?.contains("TimeoutException") == true ->
+                            ConnectionStatus.ERROR
+
+                        result.code == 401 || result.code == 403 ->
+                            ConnectionStatus.ERROR
+
+                        else -> ConnectionStatus.ERROR
+                    }
+
+                    _uiState.value = _uiState.value.copy(
+                        connectionStatus = connectionStatus,
+                        networkAvailable = false,
+                        errorMessage = when (connectionStatus) {
+                            ConnectionStatus.DISCONNECTED -> "Sin conexión a internet"
+                            ConnectionStatus.ERROR -> "Error de servidor: ${result.exception.message}"
+                            else -> "Error desconocido"
+                        }
+                    )
+                }
+                is EmergencyResult.Loading -> {
+                    // Ya manejado arriba
+                }
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                connectionStatus = ConnectionStatus.ERROR,
+                networkAvailable = false,
+                errorMessage = "Error de conectividad: ${e.message}"
+            )
         }
     }
 
+    // ✅ FUNCIÓN EXISTENTE MEJORADA: retryConnection
+    fun retryConnection() {
+        viewModelScope.launch {
+            checkNetworkConnectivity()
+        }
+    }
+
+    // ✅ NUEVA FUNCIÓN: Detener monitoreo
+    fun stopConnectivityMonitoring() {
+        _connectivityJob.value?.cancel()
+        _connectivityJob.value = null
+    }
+
+    // ✅ ACTUALIZAR onCleared
     override fun onCleared() {
         super.onCleared()
-        // Cleanup si es necesario
+        stopConnectivityMonitoring()
     }
 }

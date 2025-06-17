@@ -47,14 +47,22 @@ class EmergencyRepository @Inject constructor(
                 emergency = createDto
             )
 
-            handleApiResponse(response) { emergencies ->
-                val emergency = emergencies.firstOrNull()
+            if (response.isSuccessful && response.body() != null) {
+                val emergency = response.body()!!.firstOrNull()
                 if (emergency != null) {
                     _currentEmergency.value = emergency
-                    emergency
+                    EmergencyResult.Success(emergency)
                 } else {
-                    throw Exception("No se pudo crear la emergencia")
-                }
+                    EmergencyResult.Error(
+                        exception = Exception("No se pudo crear la emergencia - respuesta vacía"),
+                        code = response.code()
+                    )                }
+            } else {
+                val errorBody = response.errorBody()?.string()
+                EmergencyResult.Error(
+                    exception = Exception("HTTP ${response.code()}: $errorBody"),
+                    code = response.code() // ✅ INCLUIR CÓDIGO HTTP
+                )
             }
         } catch (e: Exception) {
             EmergencyResult.Error(e)
@@ -71,13 +79,19 @@ class EmergencyRepository @Inject constructor(
                 userId = "eq.$userId"
             )
 
-            handleApiResponse(response) { emergencies ->
-                val emergency = emergencies.firstOrNull()
+            if (response.isSuccessful) {
+                val emergency = response.body()?.firstOrNull()
                 _currentEmergency.value = emergency
-                emergency
+                EmergencyResult.Success(emergency)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                EmergencyResult.Error(
+                    exception = Exception("HTTP ${response.code()}: $errorBody"),
+                    code = response.code()
+                )
             }
         } catch (e: Exception) {
-            EmergencyResult.Error(e)
+            EmergencyResult.Error(e, null)
         }
     }
 

@@ -79,6 +79,28 @@ class EmergencyUseCase @Inject constructor(
             is EmergencyResult.Loading -> result
         }
     }
+    suspend fun testConnection(
+        authToken: String,
+        userId: String
+    ): EmergencyResult<Boolean> {
+        return try {
+            // Hace una llamada simple para verificar conectividad
+            when (val result = emergencyRepository.getCurrentActiveEmergency(authToken, userId)) {
+                is EmergencyResult.Success -> {
+                    EmergencyResult.Success(true)
+                }
+                is EmergencyResult.Error -> {
+                    // Propagar el error con código si existe
+                    EmergencyResult.Error(result.exception, result.code)
+                }
+                is EmergencyResult.Loading -> {
+                    EmergencyResult.Loading
+                }
+            }
+        } catch (e: Exception) {
+            EmergencyResult.Error(e)
+        }
+    }
 
     fun isPanicActive(): Flow<Boolean> {
         return emergencyRepository.isPanicActive()
@@ -89,6 +111,7 @@ class EmergencyUseCase @Inject constructor(
             dto?.toDomainModel()
         }
     }
+
 
     private fun createDeviceInfoJson(): String {
         return """

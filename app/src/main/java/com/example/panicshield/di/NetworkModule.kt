@@ -128,8 +128,8 @@ object NetworkModule {
     // ✅ AGREGAR ESTE - LocationUseCase
     @Provides
     @Singleton
-    fun provideLocationUseCase(): LocationUseCase {
-        return LocationUseCase()
-    }
+    fun provideLocationUseCase(
+        @ApplicationContext context: Context
+    ): LocationUseCase = LocationUseCase(context)
 
 }
