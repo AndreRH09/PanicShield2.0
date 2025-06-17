@@ -172,4 +172,60 @@ class EmergencyRepository @Inject constructor(
             )
         }
     }
+
+    // ✅ FUNCIÓN: Obtener historial completo de emergencias
+    suspend fun getEmergencyHistory(
+        authToken: String,
+        userId: String
+    ): EmergencyResult<List<EmergencyDto>> {
+        return try {
+            val response = emergencyApi.getEmergencyHistory(
+                authorization = "Bearer $authToken",
+                userId = "eq.$userId"
+            )
+
+            if (response.isSuccessful && response.body() != null) {
+                val emergencies = response.body()!!
+                EmergencyResult.Success(emergencies)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                EmergencyResult.Error(
+                    exception = Exception("HTTP ${response.code()}: $errorBody"),
+                    code = response.code()
+                )
+            }
+        } catch (e: Exception) {
+            EmergencyResult.Error(e, null)
+        }
+    }
+
+    // ✅ FUNCIÓN: Obtener emergencia por ID
+    suspend fun getEmergencyById(
+        authToken: String,
+        emergencyId: Long
+    ): EmergencyResult<EmergencyDto?> {
+        return try {
+            val response = emergencyApi.getEmergencyById(
+                authorization = "Bearer $authToken",
+                id = "eq.$emergencyId"
+            )
+
+            if (response.isSuccessful && response.body() != null) {
+                val emergency = response.body()!!.firstOrNull()
+                EmergencyResult.Success(emergency)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                EmergencyResult.Error(
+                    exception = Exception("HTTP ${response.code()}: $errorBody"),
+                    code = response.code()
+                )
+            }
+        } catch (e: Exception) {
+            EmergencyResult.Error(e, null)
+        }
+    }
+
+
+
+
 }

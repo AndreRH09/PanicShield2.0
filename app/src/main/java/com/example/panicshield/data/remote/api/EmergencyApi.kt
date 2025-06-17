@@ -80,4 +80,22 @@ interface EmergencyApi {
         @Query("user_id") userId: String,
         @Query("status") status: String = "in.(pending,active)"
     ): Response<List<Map<String, Any>>>
+
+
+
+
+// ===== TAMBIÉN AGREGAR ESTAS FUNCIONES A EmergencyApi.kt =====
+
+    // ✅ OBTENER historial de emergencias
+    @GET("rest/v1/emergencies")
+    suspend fun getEmergencyHistory(
+        @Header("apikey") apikey: String = ApiConstants.API_KEY,
+        @Header("Authorization") authorization: String,
+        @Query("select") select: String = "*",
+        @Query("user_id") userId: String,
+        @Query("order") order: String = "created_at.desc"
+    ): Response<List<EmergencyDto>>
+
+
+
 }
