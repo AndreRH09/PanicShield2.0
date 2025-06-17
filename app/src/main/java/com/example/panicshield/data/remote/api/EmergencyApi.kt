@@ -8,14 +8,12 @@ import retrofit2.http.*
 
 interface EmergencyApi {
 
-    //  PROBLEMA: Usar @Query("user_id") userId con "eq.$userId" no funciona
-    //  SOLUCIÓN: Usar @Query("user_id") userId: String? = null directamente
     @GET("rest/v1/emergencies")
     suspend fun getEmergencies(
         @Header("apikey") apikey: String = ApiConstants.API_KEY,
         @Header("Authorization") authorization: String,
         @Query("select") select: String = "*",
-        @Query("user_id") userId: String? = null, //  Sin "eq." aquí
+        @Query("user_id") userId: String? = null,
         @Query("status") status: String? = null,
         @Query("emergency_type") emergencyType: String? = null,
         @Query("priority") priority: String? = null
@@ -43,7 +41,7 @@ interface EmergencyApi {
         @Header("Authorization") authorization: String,
         @Header("Content-Type") contentType: String = "application/json",
         @Header("Prefer") prefer: String = "return=representation",
-        @Query("id") id: String, //  Sin "eq." aquí
+        @Query("id") id: String,
         @Body emergency: UpdateEmergencyDto
     ): Response<List<EmergencyDto>>
 
@@ -51,6 +49,6 @@ interface EmergencyApi {
     suspend fun deleteEmergency(
         @Header("apikey") apikey: String = ApiConstants.API_KEY,
         @Header("Authorization") authorization: String,
-        @Query("id") id: String //  Sin "eq." aquí
+        @Query("id") id: String
     ): Response<Unit>
 }

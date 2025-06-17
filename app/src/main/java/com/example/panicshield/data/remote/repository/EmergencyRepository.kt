@@ -15,7 +15,6 @@ class EmergencyRepository @Inject constructor(
     private val tokenManager: TokenManager
 ) {
 
-    // CORRECCIÓN: Obtener emergencias del usuario actual
     suspend fun getUserEmergencies(): Result<List<Emergency>> {
         return try {
             val token = tokenManager.getAccessToken().first()
@@ -24,10 +23,9 @@ class EmergencyRepository @Inject constructor(
             val userId = tokenManager.getUserId().first()
                 ?: return Result.failure(Exception("No user ID available"))
 
-            //  Pasar userId con formato "eq.$userId" para Supabase
             val response = emergencyApi.getEmergencies(
                 authorization = "Bearer $token",
-                userId = "eq.$userId" //  Aquí sí va el formato de Supabase
+                userId = "eq.$userId"
             )
 
             if (response.isSuccessful) {
@@ -51,7 +49,6 @@ class EmergencyRepository @Inject constructor(
                 } ?: emptyList()
                 Result.success(emergencies)
             } else {
-                //  Mejor manejo de errores HTTP
                 val errorBody = response.errorBody()?.string()
                 Result.failure(Exception("HTTP ${response.code()}: ${response.message()}. Body: $errorBody"))
             }
@@ -60,7 +57,7 @@ class EmergencyRepository @Inject constructor(
         }
     }
 
-    //  CORRECCIÓN: Obtener todas las emergencias
+    //  Obtener todas las emergencias
     suspend fun getAllEmergencies(): Result<List<Emergency>> {
         return try {
             val token = tokenManager.getAccessToken().first()
@@ -99,7 +96,7 @@ class EmergencyRepository @Inject constructor(
         }
     }
 
-    //  CORRECCIÓN: Crear emergencia
+    //  Crear emergencia
     suspend fun createEmergency(
         emergencyType: String,
         status: String = "active",
@@ -164,7 +161,7 @@ class EmergencyRepository @Inject constructor(
         }
     }
 
-    //  CORRECCIÓN: Actualizar emergencia
+    //  Actualizar emergencia
     suspend fun updateEmergency(
         id: Long,
         emergencyType: String? = null,
@@ -231,7 +228,7 @@ class EmergencyRepository @Inject constructor(
         }
     }
 
-    //  CORRECCIÓN: Eliminar emergencia
+    //  Eliminar emergencia
     suspend fun deleteEmergency(id: Long): Result<Unit> {
         return try {
             val token = tokenManager.getAccessToken().first()
@@ -253,7 +250,7 @@ class EmergencyRepository @Inject constructor(
         }
     }
 
-    //  CORRECCIÓN: Filtrar emergencias por estado
+    //  Filtrar emergencias por estado
     suspend fun getEmergenciesByStatus(status: String): Result<List<Emergency>> {
         return try {
             val token = tokenManager.getAccessToken().first()

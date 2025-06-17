@@ -1,8 +1,6 @@
 package com.example.panicshield.ui.screen.map
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -88,42 +86,6 @@ fun MapScreen(
         )
 
         // UI Cards superpuestas
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .fillMaxWidth()
-        ) {
-            // Card de filtros
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Filtros de Emergencias",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(MapFilter.values()) { filter ->
-                            FilterChip(
-                                onClick = { viewModel.setMapFilter(filter) },
-                                label = { Text(filter.displayName) },
-                                selected = mapFilter == filter
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             // Card de estado
             when (emergenciesState) {
@@ -261,7 +223,7 @@ fun MapScreen(
                 }
             }
         }
-    }
+
 }
 
 private fun initializeMapLayers(style: Style) {

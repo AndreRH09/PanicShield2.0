@@ -37,7 +37,6 @@ data class EmergencyDto(
     @SerializedName("priority")
     val priority: String? = null,
 
-    // Usar el deserializador personalizado para manejar JSON como string
     @SerializedName("device_info")
     @JsonAdapter(JsonMapDeserializer::class)
     val deviceInfo: Map<String, Any>? = null,
@@ -45,7 +44,6 @@ data class EmergencyDto(
     @SerializedName("response_time")
     val responseTime: Int? = null,
 
-    // También aplicar el deserializador a responder_info por consistencia
     @SerializedName("responder_info")
     @JsonAdapter(JsonMapDeserializer::class)
     val responderInfo: Map<String, Any>? = null
@@ -76,7 +74,6 @@ data class CreateEmergencyDto(
     @SerializedName("priority")
     val priority: String,
 
-    // Para envío, convertir el Map a JSON string si es necesario
     @SerializedName("device_info")
     val deviceInfo: Map<String, Any>? = null
 )
