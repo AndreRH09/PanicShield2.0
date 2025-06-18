@@ -3,7 +3,7 @@ package com.example.panicshield.ui.screen.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.panicshield.data.local.TokenManager
-import com.example.panicshield.data.repository.EmergencyResult
+import com.example.panicshield.data.remote.repository.EmergencyResult
 import com.example.panicshield.domain.usecase.EmergencyUseCase
 import com.example.panicshield.domain.usecase.LocationUseCase
 import com.example.panicshield.domain.model.*
@@ -13,6 +13,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+// UI State para Home
+data class HomeUIState(
+    val isPanicActivated: Boolean = false,
+    val isLoading: Boolean = false,
+    val emergencyId: String? = null,
+    val emergencyStatus: EmergencyStatus = EmergencyStatus.INACTIVE,
+    val lastPanicTime: Long? = null,
+    val lastSyncTime: Long? = null,
+    val errorMessage: String? = null,
+    val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
+    val networkAvailable: Boolean = false,
+    val isLocationPermissionGranted: Boolean = false
+)
+
+// Estados de conexión
+enum class ConnectionStatus {
+    CONNECTED,
+    CONNECTING,
+    DISCONNECTED,
+    ERROR
+}
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -29,8 +51,6 @@ class HomeViewModel @Inject constructor(
     val locationInfo: StateFlow<LocationInfo?> = _locationInfo.asStateFlow()
 
     // Estados de autenticación
-    private val _currentUserId = MutableStateFlow<String?>(null)
-    private val _currentAccessToken = MutableStateFlow<String?>(null)
     private val _isAuthenticated = MutableStateFlow(false)
 
     init {
@@ -55,22 +75,6 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
-
-        viewModelScope.launch {
-            tokenManager.getUserId().collect { userId ->
-                _currentUserId.value = userId
-            }
-        }
-
-        viewModelScope.launch {
-            tokenManager.getAccessToken().collect { token ->
-                _currentAccessToken.value = token
-
-                if (token != null && _currentUserId.value != null) {
-                    checkForActiveEmergency()
-                }
-            }
-        }
     }
 
     private fun observePanicState() {
@@ -87,7 +91,7 @@ class HomeViewModel @Inject constructor(
             emergencyUseCase.getCurrentEmergency().collect { emergency ->
                 _uiState.value = _uiState.value.copy(
                     emergencyId = emergency?.id?.toString(),
-                    emergencyStatus = emergency?.status ?: EmergencyStatus.INACTIVE,
+                    emergencyStatus = emergency?.statusEnum ?: EmergencyStatus.INACTIVE,
                     lastSyncTime = System.currentTimeMillis()
                 )
             }
@@ -113,16 +117,13 @@ class HomeViewModel @Inject constructor(
 
     private fun checkForActiveEmergency() {
         viewModelScope.launch {
-            val token = _currentAccessToken.value
-            val userId = _currentUserId.value
-
-            if (token == null || userId == null) {
+            if (!_isAuthenticated.value) {
                 return@launch
             }
 
             _uiState.value = _uiState.value.copy(connectionStatus = ConnectionStatus.CONNECTING)
 
-            when (val result = emergencyUseCase.getCurrentActiveEmergency(token, userId)) {
+            when (val result = emergencyUseCase.getCurrentActiveEmergency()) {
                 is EmergencyResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         connectionStatus = ConnectionStatus.CONNECTED,
@@ -160,10 +161,7 @@ class HomeViewModel @Inject constructor(
 
     private fun activatePanic() {
         viewModelScope.launch {
-            val token = _currentAccessToken.value
-            val userId = _currentUserId.value
-
-            if (token == null || userId == null) {
+            if (!_isAuthenticated.value) {
                 _uiState.value = _uiState.value.copy(
                     errorMessage = "Debes iniciar sesión para activar emergencias"
                 )
@@ -184,10 +182,16 @@ class HomeViewModel @Inject constructor(
                 errorMessage = null
             )
 
+            // Convertir LocationInfo a LocationInfo de EmergencyUseCase si es necesario
+            val locationForEmergency = com.example.panicshield.domain.usecase.LocationInfo(
+                latitude = currentLocation.latitude,
+                longitude = currentLocation.longitude,
+                address = currentLocation.address,
+                accuracy = currentLocation.accuracy
+            )
+
             when (val result = emergencyUseCase.createPanicAlert(
-                authToken = token,
-                userId = userId,
-                location = currentLocation,
+                location = locationForEmergency,
                 message = "Emergencia activada desde botón de pánico"
             )) {
                 is EmergencyResult.Success -> {
@@ -217,15 +221,7 @@ class HomeViewModel @Inject constructor(
 
     private fun deactivatePanic() {
         viewModelScope.launch {
-            val token = _currentAccessToken.value
             val emergencyIdString = _uiState.value.emergencyId
-
-            if (token == null) {
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Error de autenticación"
-                )
-                return@launch
-            }
 
             if (emergencyIdString == null) {
                 _uiState.value = _uiState.value.copy(
@@ -247,7 +243,7 @@ class HomeViewModel @Inject constructor(
                 emergencyStatus = EmergencyStatus.CANCELLING
             )
 
-            when (val result = emergencyUseCase.cancelEmergency(token, emergencyId)) {
+            when (val result = emergencyUseCase.cancelEmergency(emergencyId)) {
                 is EmergencyResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -298,10 +294,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun getCurrentUserId(): String? {
-        return _currentUserId.value
-    }
-
     fun getConnectionStatusText(): String {
         return when (_uiState.value.connectionStatus) {
             ConnectionStatus.CONNECTED -> "Conectado"
@@ -321,9 +313,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-
-
-
     // ✅ NUEVA FUNCIÓN: Monitoreo de conectividad con suspend
     fun startConnectivityMonitoring() {
         // Cancelar job anterior si existe
@@ -340,15 +329,12 @@ class HomeViewModel @Inject constructor(
 
     // ✅ NUEVA FUNCIÓN: Verificar conectividad de red
     private suspend fun checkNetworkConnectivity() {
-        val token = _currentAccessToken.value
-        val userId = _currentUserId.value
-
         _uiState.value = _uiState.value.copy(
             connectionStatus = ConnectionStatus.CONNECTING
         )
 
         try {
-            if (token == null || userId == null) {
+            if (!_isAuthenticated.value) {
                 _uiState.value = _uiState.value.copy(
                     connectionStatus = ConnectionStatus.ERROR,
                     errorMessage = "No hay credenciales de autenticación"
@@ -357,7 +343,7 @@ class HomeViewModel @Inject constructor(
             }
 
             // ✅ USAR SUSPEND para verificar conectividad
-            when (val result = emergencyUseCase.testConnection(token, userId)) {
+            when (val result = emergencyUseCase.testConnection()) {
                 is EmergencyResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         connectionStatus = ConnectionStatus.CONNECTED,

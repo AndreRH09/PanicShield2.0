@@ -1,6 +1,5 @@
 package com.example.panicshield.ui.screen.history
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.panicshield.domain.model.EmergencyHistory
+import com.example.panicshield.domain.usecase.EmergencyHistory
 import com.example.panicshield.domain.model.EmergencyStatus
 import java.text.SimpleDateFormat
 import java.util.*
@@ -85,6 +84,7 @@ fun HistoryScreen(
                     uiState = uiState,
                     onEmergencyClick = { emergency -> viewModel.selectEmergency(emergency) },
                     onFilterChange = { filter -> viewModel.setTimeFilter(filter) },
+                    onSearchChange = { query -> viewModel.setSearchQuery(query) },
                     onRefresh = { viewModel.loadEmergencyHistory() },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -97,7 +97,8 @@ fun HistoryScreen(
 fun HistoryListView(
     uiState: HistoryUIState,
     onEmergencyClick: (EmergencyHistory) -> Unit,
-    onFilterChange: (TimeFilter) -> Unit,
+    onFilterChange: (HistoryTimeFilter) -> Unit,
+    onSearchChange: (String) -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -105,7 +106,7 @@ fun HistoryListView(
         // ✅ BARRA DE BÚSQUEDA
         SearchBar(
             searchQuery = uiState.searchQuery,
-            onSearchChange = { /* TODO: Implementar búsqueda */ },
+            onSearchChange = onSearchChange,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
@@ -150,6 +151,35 @@ fun HistoryListView(
                 )
             }
         }
+
+        // ✅ MOSTRAR ERROR SI EXISTE
+        uiState.errorMessage?.let { error ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFFFEBEE)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Error,
+                        contentDescription = "Error",
+                        tint = Color(0xFFE53935)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = error,
+                        color = Color(0xFFE53935),
+                        fontSize = 14.sp
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -163,7 +193,7 @@ fun SearchBar(
     OutlinedTextField(
         value = searchQuery,
         onValueChange = onSearchChange,
-        placeholder = { Text("Buscar") },
+        placeholder = { Text("Buscar emergencias...") },
         leadingIcon = {
             Icon(
                 imageVector = Icons.Default.Search,
@@ -171,11 +201,23 @@ fun SearchBar(
                 tint = Color.Gray
             )
         },
+        trailingIcon = {
+            if (searchQuery.isNotEmpty()) {
+                IconButton(onClick = { onSearchChange("") }) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "Limpiar",
+                        tint = Color.Gray
+                    )
+                }
+            }
+        },
         modifier = modifier,
         shape = RoundedCornerShape(25.dp),
         colors = TextFieldDefaults.outlinedTextFieldColors(
             focusedBorderColor = Color.Transparent,
             unfocusedBorderColor = Color.Transparent,
+            containerColor = Color.White
         ),
         singleLine = true
     )
@@ -183,15 +225,15 @@ fun SearchBar(
 
 @Composable
 fun TimeFilterRow(
-    selectedFilter: TimeFilter,
-    onFilterChange: (TimeFilter) -> Unit,
+    selectedFilter: HistoryTimeFilter,
+    onFilterChange: (HistoryTimeFilter) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        TimeFilter.values().forEach { filter ->
+        HistoryTimeFilter.values().forEach { filter ->
             FilterChip(
                 selected = selectedFilter == filter,
                 onClick = { onFilterChange(filter) },
@@ -314,6 +356,17 @@ fun EmergencyHistoryItem(
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
+
+                // Mostrar dirección si está disponible
+                emergency.address?.let { address ->
+                    Text(
+                        text = address,
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             // ✅ FLECHA INDICADOR
@@ -337,6 +390,7 @@ fun EmergencyStatusIcon(
         EmergencyStatus.COMPLETED -> Icons.Default.CheckCircle to Color(0xFF4CAF50)
         EmergencyStatus.CANCELLED -> Icons.Default.Cancel to Color(0xFF757575)
         EmergencyStatus.PENDING -> Icons.Default.Schedule to Color(0xFFFF9800)
+        EmergencyStatus.CANCELLING -> Icons.Default.HourglassEmpty to Color(0xFFFF5722)
         else -> Icons.Default.Info to Color(0xFF2196F3)
     }
 
@@ -618,6 +672,22 @@ fun AdditionalDetailsSection(
                     value = message
                 )
             }
+
+            emergency.priority?.let { priority ->
+                DetailInfoRow(
+                    icon = Icons.Default.PriorityHigh,
+                    label = "Prioridad",
+                    value = priority
+                )
+            }
+
+            emergency.deviceInfo?.let { deviceInfo ->
+                DetailInfoRow(
+                    icon = Icons.Default.Smartphone,
+                    label = "Información del dispositivo",
+                    value = deviceInfo
+                )
+            }
         }
     }
 }
@@ -660,17 +730,17 @@ fun DetailInfoRow(
     }
 }
 
-// ===== ENUMS Y HELPERS =====
+// ===== EXTENSIÓN PARA HistoryTimeFilter =====
 
-enum class TimeFilter(val displayName: String) {
-    THIS_WEEK("Esta Semana"),
-    THIS_MONTH("Este Mes"),
-    LAST_MONTH("Mes Anterior"),
-    ALL("Todos")
-}
+val HistoryTimeFilter.displayName: String
+    get() = when (this) {
+        HistoryTimeFilter.THIS_WEEK -> "Esta Semana"
+        HistoryTimeFilter.THIS_MONTH -> "Este Mes"
+        HistoryTimeFilter.LAST_MONTH -> "Mes Anterior"
+        HistoryTimeFilter.ALL -> "Todos"
+    }
 
 // ===== FUNCIONES HELPER =====
-
 
 // ✅ FUNCIÓN: Formatear fecha completa con día de la semana
 private fun formatDate(timestamp: Long): String {

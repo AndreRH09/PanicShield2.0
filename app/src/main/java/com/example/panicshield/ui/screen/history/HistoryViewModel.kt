@@ -3,9 +3,11 @@ package com.example.panicshield.ui.screen.history
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.panicshield.data.local.TokenManager
-import com.example.panicshield.data.repository.EmergencyResult
-import com.example.panicshield.domain.model.EmergencyHistory
+import com.example.panicshield.domain.usecase.EmergencyResult
 import com.example.panicshield.domain.usecase.HistoryUseCase
+import com.example.panicshield.domain.usecase.EmergencyHistory
+import com.example.panicshield.domain.usecase.EmergencyStatistics
+import com.example.panicshield.domain.model.EmergencyStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,11 +17,21 @@ import kotlinx.coroutines.launch
 import java.util.*
 import javax.inject.Inject
 
+// Enum de filtros de tiempo (si no existe ya en otro lugar)
+enum class HistoryTimeFilter {
+    THIS_WEEK,
+    THIS_MONTH,
+    LAST_MONTH,
+    ALL
+}
+
 data class HistoryUIState(
     val emergencyHistory: List<EmergencyHistory> = emptyList(),
     val filteredEmergencies: List<EmergencyHistory> = emptyList(),
     val selectedEmergency: EmergencyHistory? = null,
-    val currentFilter: TimeFilter = TimeFilter.THIS_WEEK,
+    val statistics: EmergencyStatistics? = null,
+    val currentFilter: HistoryTimeFilter = HistoryTimeFilter.THIS_WEEK,
+    val statusFilter: EmergencyStatus? = null,
     val searchQuery: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
@@ -35,9 +47,6 @@ class HistoryViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HistoryUIState())
     val uiState: StateFlow<HistoryUIState> = _uiState.asStateFlow()
 
-    private val _currentUserId = MutableStateFlow<String?>(null)
-    private val _currentAccessToken = MutableStateFlow<String?>(null)
-
     init {
         observeAuthenticationState()
         observeFiltersAndSearch()
@@ -48,30 +57,23 @@ class HistoryViewModel @Inject constructor(
             tokenManager.isLoggedIn().collect { isLoggedIn ->
                 _uiState.value = _uiState.value.copy(isAuthenticated = isLoggedIn)
 
-                if (!isLoggedIn) {
+                if (isLoggedIn) {
+                    // Auto-cargar datos cuando el usuario esté autenticado
+                    loadEmergencyHistory()
+                } else {
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = "Debes iniciar sesión para ver el historial"
+                        errorMessage = "Debes iniciar sesión para ver el historial",
+                        emergencyHistory = emptyList(),
+                        filteredEmergencies = emptyList()
                     )
                 }
-            }
-        }
-
-        viewModelScope.launch {
-            tokenManager.getUserId().collect { userId ->
-                _currentUserId.value = userId
-            }
-        }
-
-        viewModelScope.launch {
-            tokenManager.getAccessToken().collect { token ->
-                _currentAccessToken.value = token
             }
         }
     }
 
     private fun observeFiltersAndSearch() {
         viewModelScope.launch {
-            // ✅ Combinar filtros y búsqueda para actualizar lista filtrada
+            // Combinar cambios de filtros y búsqueda
             combine(
                 _uiState,
                 _uiState
@@ -80,7 +82,8 @@ class HistoryViewModel @Inject constructor(
             }.collect { (state, _) ->
                 val filtered = applyFiltersAndSearch(
                     emergencies = state.emergencyHistory,
-                    filter = state.currentFilter,
+                    timeFilter = state.currentFilter,
+                    statusFilter = state.statusFilter,
                     searchQuery = state.searchQuery
                 )
 
@@ -91,15 +94,12 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    // ✅ FUNCIÓN: Cargar historial de emergencias
+    // ✅ FUNCIÓN: Cargar historial de emergencias (sin parámetros auth)
     fun loadEmergencyHistory() {
         viewModelScope.launch {
-            val token = _currentAccessToken.value
-            val userId = _currentUserId.value
-
-            if (token == null || userId == null) {
+            if (!_uiState.value.isAuthenticated) {
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "No hay credenciales de autenticación"
+                    errorMessage = "Usuario no autenticado"
                 )
                 return@launch
             }
@@ -109,12 +109,13 @@ class HistoryViewModel @Inject constructor(
                 errorMessage = null
             )
 
-            when (val result = historyUseCase.getEmergencyHistory(token, userId)) {
+            when (val result = historyUseCase.getEmergencyHistory()) {
                 is EmergencyResult.Success -> {
                     val emergencies = result.data
                     val filtered = applyFiltersAndSearch(
                         emergencies = emergencies,
-                        filter = _uiState.value.currentFilter,
+                        timeFilter = _uiState.value.currentFilter,
+                        statusFilter = _uiState.value.statusFilter,
                         searchQuery = _uiState.value.searchQuery
                     )
 
@@ -124,6 +125,9 @@ class HistoryViewModel @Inject constructor(
                         filteredEmergencies = filtered,
                         errorMessage = null
                     )
+
+                    // Cargar estadísticas
+                    loadStatistics()
                 }
                 is EmergencyResult.Error -> {
                     _uiState.value = _uiState.value.copy(
@@ -138,6 +142,26 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    // ✅ FUNCIÓN: Cargar estadísticas
+    private fun loadStatistics() {
+        viewModelScope.launch {
+            when (val result = historyUseCase.getEmergencyStatistics()) {
+                is EmergencyResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        statistics = result.data
+                    )
+                }
+                is EmergencyResult.Error -> {
+                    // No mostrar error para estadísticas, es opcional
+                    println("Error loading statistics: ${result.exception.message}")
+                }
+                is EmergencyResult.Loading -> {
+                    // No necesario
+                }
+            }
+        }
+    }
+
     // ✅ FUNCIÓN: Seleccionar emergencia para ver detalles
     fun selectEmergency(emergency: EmergencyHistory) {
         _uiState.value = _uiState.value.copy(
@@ -145,7 +169,7 @@ class HistoryViewModel @Inject constructor(
         )
     }
 
-    // ✅ FUNCIÓN: Limpiar emergencia seleccionada (volver a lista)
+    // ✅ FUNCIÓN: Limpiar emergencia seleccionada
     fun clearSelectedEmergency() {
         _uiState.value = _uiState.value.copy(
             selectedEmergency = null
@@ -153,11 +177,12 @@ class HistoryViewModel @Inject constructor(
     }
 
     // ✅ FUNCIÓN: Cambiar filtro de tiempo
-    fun setTimeFilter(filter: TimeFilter) {
+    fun setTimeFilter(filter: HistoryTimeFilter) {
         val currentState = _uiState.value
         val filtered = applyFiltersAndSearch(
             emergencies = currentState.emergencyHistory,
-            filter = filter,
+            timeFilter = filter,
+            statusFilter = currentState.statusFilter,
             searchQuery = currentState.searchQuery
         )
 
@@ -167,12 +192,29 @@ class HistoryViewModel @Inject constructor(
         )
     }
 
+    // ✅ FUNCIÓN: Cambiar filtro de estado
+    fun setStatusFilter(status: EmergencyStatus?) {
+        val currentState = _uiState.value
+        val filtered = applyFiltersAndSearch(
+            emergencies = currentState.emergencyHistory,
+            timeFilter = currentState.currentFilter,
+            statusFilter = status,
+            searchQuery = currentState.searchQuery
+        )
+
+        _uiState.value = currentState.copy(
+            statusFilter = status,
+            filteredEmergencies = filtered
+        )
+    }
+
     // ✅ FUNCIÓN: Cambiar query de búsqueda
     fun setSearchQuery(query: String) {
         val currentState = _uiState.value
         val filtered = applyFiltersAndSearch(
             emergencies = currentState.emergencyHistory,
-            filter = currentState.currentFilter,
+            timeFilter = currentState.currentFilter,
+            statusFilter = currentState.statusFilter,
             searchQuery = query
         )
 
@@ -185,21 +227,12 @@ class HistoryViewModel @Inject constructor(
     // ✅ FUNCIÓN: Obtener detalles de emergencia específica
     fun getEmergencyDetails(emergencyId: Long) {
         viewModelScope.launch {
-            val token = _currentAccessToken.value
-
-            if (token == null) {
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "No hay credenciales de autenticación"
-                )
-                return@launch
-            }
-
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
                 errorMessage = null
             )
 
-            when (val result = historyUseCase.getEmergencyById(token, emergencyId)) {
+            when (val result = historyUseCase.getEmergencyById(emergencyId)) {
                 is EmergencyResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
@@ -220,6 +253,87 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
+    // ✅ FUNCIÓN: Buscar en historial
+    fun searchEmergencies(query: String) {
+        viewModelScope.launch {
+            if (query.isBlank()) {
+                setSearchQuery("")
+                return@launch
+            }
+
+            _uiState.value = _uiState.value.copy(isLoading = true)
+
+            when (val result = historyUseCase.searchEmergencyHistory(query)) {
+                is EmergencyResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        filteredEmergencies = result.data,
+                        searchQuery = query
+                    )
+                }
+                is EmergencyResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = "Error en búsqueda: ${result.exception.message}"
+                    )
+                }
+                is EmergencyResult.Loading -> {
+                    // Ya manejado arriba
+                }
+            }
+        }
+    }
+
+    // ✅ FUNCIÓN: Obtener emergencias por rango de fechas
+    fun getEmergenciesByDateRange(startDate: Long, endDate: Long) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+
+            when (val result = historyUseCase.getEmergencyHistoryByDateRange(startDate, endDate)) {
+                is EmergencyResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        filteredEmergencies = result.data
+                    )
+                }
+                is EmergencyResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = "Error al filtrar por fecha: ${result.exception.message}"
+                    )
+                }
+                is EmergencyResult.Loading -> {
+                    // Ya manejado arriba
+                }
+            }
+        }
+    }
+
+    // ✅ FUNCIÓN: Obtener emergencias por estado
+    fun getEmergenciesByStatus(status: EmergencyStatus) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+
+            when (val result = historyUseCase.getEmergencyHistoryByStatus(status)) {
+                is EmergencyResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        filteredEmergencies = result.data
+                    )
+                }
+                is EmergencyResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = "Error al filtrar por estado: ${result.exception.message}"
+                    )
+                }
+                is EmergencyResult.Loading -> {
+                    // Ya manejado arriba
+                }
+            }
+        }
+    }
+
     // ✅ FUNCIÓN: Limpiar errores
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
@@ -230,18 +344,29 @@ class HistoryViewModel @Inject constructor(
         loadEmergencyHistory()
     }
 
+    // ✅ FUNCIÓN: Limpiar filtros
+    fun clearFilters() {
+        _uiState.value = _uiState.value.copy(
+            currentFilter = HistoryTimeFilter.ALL,
+            statusFilter = null,
+            searchQuery = "",
+            filteredEmergencies = _uiState.value.emergencyHistory
+        )
+    }
+
     // ===== FUNCIONES PRIVADAS =====
 
     private fun applyFiltersAndSearch(
         emergencies: List<EmergencyHistory>,
-        filter: TimeFilter,
+        timeFilter: HistoryTimeFilter,
+        statusFilter: EmergencyStatus?,
         searchQuery: String
     ): List<EmergencyHistory> {
         var filtered = emergencies
 
         // ✅ APLICAR FILTRO DE TIEMPO
-        filtered = when (filter) {
-            TimeFilter.THIS_WEEK -> {
+        filtered = when (timeFilter) {
+            HistoryTimeFilter.THIS_WEEK -> {
                 val calendar = Calendar.getInstance()
                 val currentWeek = calendar.get(Calendar.WEEK_OF_YEAR)
                 val currentYear = calendar.get(Calendar.YEAR)
@@ -252,7 +377,7 @@ class HistoryViewModel @Inject constructor(
                             calendar.get(Calendar.YEAR) == currentYear
                 }
             }
-            TimeFilter.THIS_MONTH -> {
+            HistoryTimeFilter.THIS_MONTH -> {
                 val calendar = Calendar.getInstance()
                 val currentMonth = calendar.get(Calendar.MONTH)
                 val currentYear = calendar.get(Calendar.YEAR)
@@ -263,7 +388,7 @@ class HistoryViewModel @Inject constructor(
                             calendar.get(Calendar.YEAR) == currentYear
                 }
             }
-            TimeFilter.LAST_MONTH -> {
+            HistoryTimeFilter.LAST_MONTH -> {
                 val calendar = Calendar.getInstance()
                 calendar.add(Calendar.MONTH, -1)
                 val lastMonth = calendar.get(Calendar.MONTH)
@@ -275,7 +400,14 @@ class HistoryViewModel @Inject constructor(
                             calendar.get(Calendar.YEAR) == lastMonthYear
                 }
             }
-            TimeFilter.ALL -> filtered
+            HistoryTimeFilter.ALL -> filtered
+        }
+
+        // ✅ APLICAR FILTRO DE ESTADO
+        statusFilter?.let { status ->
+            filtered = filtered.filter { emergency ->
+                emergency.status == status
+            }
         }
 
         // ✅ APLICAR BÚSQUEDA

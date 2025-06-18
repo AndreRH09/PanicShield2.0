@@ -6,25 +6,23 @@ import com.example.panicshield.data.remote.dto.UpdateEmergencyDto
 import com.example.panicshield.domain.model.*
 import com.google.gson.Gson
 
-// Extensión para convertir DTO a Domain Model
+// Extensión para convertir DTO a Domain Model (compatible con el modelo actual)
 fun EmergencyDto.toDomainModel(): Emergency {
     return Emergency(
         id = this.id,
         createdAt = this.createdAt,
         updatedAt = this.updatedAt,
-        userId = this.userId,
-        emergencyType = EmergencyType.fromApiValue(this.emergencyType),
-        status = EmergencyStatus.fromApiValue(this.status),
-        location = EmergencyLocation(
-            latitude = this.latitude,
-            longitude = this.longitude,
-            address = this.address
-        ),
+        userId = this.userId ?: "",
+        emergencyType = this.emergencyType,
+        status = this.status,
+        latitude = this.latitude,
+        longitude = this.longitude,
+        address = this.address,
         message = this.message,
-        priority = EmergencyPriority.fromApiValue(this.priority),
-        deviceInfo = this.deviceInfo?.let { parseDeviceInfo(it) },
+        priority = this.priority,
+        deviceInfo = this.deviceInfo,
         responseTime = this.responseTime,
-        responderInfo = this.responderInfo?.let { parseResponderInfo(it) }
+        responderInfo = this.responderInfo
     )
 }
 
@@ -32,79 +30,128 @@ fun EmergencyDto.toDomainModel(): Emergency {
 fun Emergency.toCreateDto(): CreateEmergencyDto {
     return CreateEmergencyDto(
         userId = this.userId,
-        emergencyType = this.emergencyType.toApiValue(),
-        status = this.status.toApiValue(),
-        latitude = this.location.latitude,
-        longitude = this.location.longitude,
-        address = this.location.address,
+        emergencyType = this.emergencyType,
+        status = this.status,
+        latitude = this.latitude ?: 0.0,
+        longitude = this.longitude ?: 0.0,
+        address = this.address,
         message = this.message,
-        priority = this.priority.toApiValue(),
-        deviceInfo = this.deviceInfo?.let { createDeviceInfoJson(it) }
+        priority = this.priority ?: "HIGH",
+        deviceInfo = this.deviceInfo
     )
 }
 
 // Extensión para convertir Domain Model a UpdateDTO
 fun Emergency.toUpdateDto(): UpdateEmergencyDto {
     return UpdateEmergencyDto(
-        status = this.status.toApiValue(),
-        latitude = this.location.latitude,
-        longitude = this.location.longitude,
-        address = this.location.address,
+        emergencyType = this.emergencyType,
+        status = this.status,
+        latitude = this.latitude,
+        longitude = this.longitude,
+        address = this.address,
         message = this.message,
+        priority = this.priority,
+        deviceInfo = this.deviceInfo,
         responseTime = this.responseTime,
-        responderInfo = this.responderInfo?.let { createResponderInfoJson(it) }
+        responderInfo = this.responderInfo
     )
 }
 
-// Funciones auxiliares para parsing JSON
-private fun parseDeviceInfo(json: String): DeviceInfo? {
-    return try {
-        val gson = Gson()
-        val map = gson.fromJson(json, Map::class.java) as Map<String, Any>
-        DeviceInfo(
-            model = map["model"] as? String ?: "",
-            androidVersion = map["android_version"] as? String ?: "",
-            appVersion = map["app_version"] as? String ?: "",
-            timestamp = (map["timestamp"] as? Double)?.toLong() ?: 0L
-        )
-    } catch (e: Exception) {
-        null
+// Función helper para crear CreateEmergencyDto desde parámetros tipados
+fun createEmergencyDto(
+    userId: String,
+    emergencyType: EmergencyType,
+    status: EmergencyStatus = EmergencyStatus.PENDING,
+    location: EmergencyLocation,
+    message: String? = null,
+    priority: EmergencyPriority = EmergencyPriority.HIGH,
+    deviceInfo: DeviceInfo? = null
+): CreateEmergencyDto {
+    return CreateEmergencyDto(
+        userId = userId,
+        emergencyType = emergencyType.toApiValue(),
+        status = status.toApiValue(),
+        latitude = location.latitude,
+        longitude = location.longitude,
+        address = location.address,
+        message = message,
+        priority = priority.toApiValue(),
+        deviceInfo = deviceInfo?.let { createDeviceInfoMap(it) }
+    )
+}
+
+// Función helper para crear UpdateEmergencyDto desde parámetros tipados
+fun createUpdateEmergencyDto(
+    emergencyType: EmergencyType? = null,
+    status: EmergencyStatus? = null,
+    location: EmergencyLocation? = null,
+    message: String? = null,
+    priority: EmergencyPriority? = null,
+    deviceInfo: DeviceInfo? = null,
+    responseTime: Int? = null,
+    responderInfo: ResponderInfo? = null
+): UpdateEmergencyDto {
+    return UpdateEmergencyDto(
+        emergencyType = emergencyType?.toApiValue(),
+        status = status?.toApiValue(),
+        latitude = location?.latitude,
+        longitude = location?.longitude,
+        address = location?.address,
+        message = message,
+        priority = priority?.toApiValue(),
+        deviceInfo = deviceInfo?.let { createDeviceInfoMap(it) },
+        responseTime = responseTime,
+        responderInfo = responderInfo?.let { createResponderInfoMap(it) }
+    )
+}
+
+// ===== FUNCIONES HELPER PRIVADAS =====
+
+private fun createDeviceInfoMap(deviceInfo: DeviceInfo): Map<String, Any> {
+    return mapOf(
+        "model" to deviceInfo.model,
+        "androidVersion" to deviceInfo.androidVersion,
+        "appVersion" to deviceInfo.appVersion,
+        "timestamp" to deviceInfo.timestamp
+    )
+}
+
+private fun createResponderInfoMap(responderInfo: ResponderInfo): Map<String, Any> {
+    return mapOf(
+        "responderId" to responderInfo.responderId,
+        "responderName" to responderInfo.responderName,
+        "estimatedArrival" to (responderInfo.estimatedArrival ?: ""),
+        "contactNumber" to (responderInfo.contactNumber ?: "")
+    )
+}
+
+// Funciones auxiliares para parsing (si necesitas convertir de Map a objetos tipados)
+fun parseDeviceInfo(deviceInfo: Map<String, Any>?): DeviceInfo? {
+    return deviceInfo?.let { info ->
+        try {
+            DeviceInfo(
+                model = info["model"] as? String ?: "Unknown",
+                androidVersion = info["androidVersion"] as? String ?: "Unknown",
+                appVersion = info["appVersion"] as? String ?: "Unknown",
+                timestamp = (info["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 }
 
-private fun parseResponderInfo(json: String): ResponderInfo? {
-    return try {
-        val gson = Gson()
-        val map = gson.fromJson(json, Map::class.java) as Map<String, Any>
-        ResponderInfo(
-            responderId = map["responder_id"] as? String ?: "",
-            responderName = map["responder_name"] as? String ?: "",
-            estimatedArrival = map["estimated_arrival"] as? String,
-            contactNumber = map["contact_number"] as? String
-        )
-    } catch (e: Exception) {
-        null
+fun parseResponderInfo(responderInfo: Map<String, Any>?): ResponderInfo? {
+    return responderInfo?.let { info ->
+        try {
+            ResponderInfo(
+                responderId = info["responderId"] as? String ?: "",
+                responderName = info["responderName"] as? String ?: "",
+                estimatedArrival = info["estimatedArrival"] as? String,
+                contactNumber = info["contactNumber"] as? String
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
-}
-
-private fun createDeviceInfoJson(deviceInfo: DeviceInfo): String {
-    return """
-        {
-            "model": "${deviceInfo.model}",
-            "android_version": "${deviceInfo.androidVersion}",
-            "app_version": "${deviceInfo.appVersion}",
-            "timestamp": ${deviceInfo.timestamp}
-        }
-    """.trimIndent()
-}
-
-private fun createResponderInfoJson(responderInfo: ResponderInfo): String {
-    return """
-        {
-            "responder_id": "${responderInfo.responderId}",
-            "responder_name": "${responderInfo.responderName}",
-            "estimated_arrival": "${responderInfo.estimatedArrival ?: ""}",
-            "contact_number": "${responderInfo.contactNumber ?: ""}"
-        }
-    """.trimIndent()
 }
