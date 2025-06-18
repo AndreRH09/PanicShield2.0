@@ -5,16 +5,65 @@ data class Emergency(
     val createdAt: String? = null,
     val updatedAt: String? = null,
     val userId: String,
-    val emergencyType: EmergencyType,
-    val status: EmergencyStatus,
-    val location: EmergencyLocation,
+    val emergencyType: String, // Mantenemos String para flexibilidad con API
+    val status: String, // Mantenemos String para flexibilidad con API
+    val latitude: Double? = null, // Campos separados para compatibilidad con MapCreate
+    val longitude: Double? = null,
+    val address: String? = null,
     val message: String? = null,
-    val priority: EmergencyPriority = EmergencyPriority.HIGH,
-    val deviceInfo: DeviceInfo? = null,
+    val priority: String? = null, // String para flexibilidad
+    val deviceInfo: Map<String, Any>? = null, // Map para flexibilidad
     val responseTime: Int? = null,
-    val responderInfo: ResponderInfo? = null
-)
+    val responderInfo: Map<String, Any>? = null // Map para flexibilidad
+) {
+    // Propiedades computadas para acceso tipado (de Master)
+    val emergencyTypeEnum: EmergencyType
+        get() = EmergencyType.fromApiValue(emergencyType)
+    
+    val statusEnum: EmergencyStatus
+        get() = EmergencyStatus.fromApiValue(status)
+    
+    val priorityEnum: EmergencyPriority
+        get() = EmergencyPriority.fromApiValue(priority ?: "HIGH")
+    
+    // Location como propiedad computada
+    val location: EmergencyLocation?
+        get() = if (latitude != null && longitude != null) {
+            EmergencyLocation(latitude, longitude, address)
+        } else null
+    
+    // Device info tipado
+    val deviceInfoTyped: DeviceInfo?
+        get() = deviceInfo?.let { info ->
+            try {
+                DeviceInfo(
+                    model = info["model"] as? String ?: "Unknown",
+                    androidVersion = info["androidVersion"] as? String ?: "Unknown",
+                    appVersion = info["appVersion"] as? String ?: "Unknown",
+                    timestamp = (info["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+    
+    // Responder info tipado
+    val responderInfoTyped: ResponderInfo?
+        get() = responderInfo?.let { info ->
+            try {
+                ResponderInfo(
+                    responderId = info["responderId"] as? String ?: "",
+                    responderName = info["responderName"] as? String ?: "",
+                    estimatedArrival = info["estimatedArrival"] as? String,
+                    contactNumber = info["contactNumber"] as? String
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+}
 
+// Enums del Master para tipado fuerte
 enum class EmergencyType {
     PANIC_BUTTON,
     MEDICAL,
@@ -29,7 +78,7 @@ enum class EmergencyType {
     }
 
     companion object {
-        fun fromApiValue(value: String): EmergencyType = when (value) {
+        fun fromApiValue(value: String): EmergencyType = when (value.lowercase()) {
             "panic_button" -> PANIC_BUTTON
             "medical" -> MEDICAL
             "fire" -> FIRE
@@ -57,7 +106,7 @@ enum class EmergencyStatus {
     }
 
     companion object {
-        fun fromApiValue(value: String): EmergencyStatus = when (value) {
+        fun fromApiValue(value: String): EmergencyStatus = when (value.lowercase()) {
             "pending" -> PENDING
             "active" -> ACTIVE
             "cancelling" -> CANCELLING
@@ -82,7 +131,7 @@ enum class EmergencyPriority {
     }
 
     companion object {
-        fun fromApiValue(value: String): EmergencyPriority = when (value) {
+        fun fromApiValue(value: String): EmergencyPriority = when (value.uppercase()) {
             "LOW" -> LOW
             "MEDIUM" -> MEDIUM
             "HIGH" -> HIGH
@@ -92,6 +141,7 @@ enum class EmergencyPriority {
     }
 }
 
+// Data classes del Master para estructuras tipadas
 data class EmergencyLocation(
     val latitude: Double,
     val longitude: Double,

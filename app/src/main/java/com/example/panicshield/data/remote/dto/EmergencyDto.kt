@@ -1,5 +1,6 @@
 package com.example.panicshield.data.remote.dto
 
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 
 data class EmergencyDto(
@@ -13,7 +14,7 @@ data class EmergencyDto(
     val updatedAt: String? = null,
 
     @SerializedName("user_id")
-    val userId: String,
+    val userId: String? = null, // Nullable para flexibilidad en consultas generales
 
     @SerializedName("emergency_type")
     val emergencyType: String,
@@ -22,10 +23,10 @@ data class EmergencyDto(
     val status: String,
 
     @SerializedName("latitude")
-    val latitude: Double,
+    val latitude: Double? = null, // Nullable para casos donde no se tenga ubicación
 
     @SerializedName("longitude")
-    val longitude: Double,
+    val longitude: Double? = null, // Nullable para casos donde no se tenga ubicación
 
     @SerializedName("address")
     val address: String? = null,
@@ -34,16 +35,18 @@ data class EmergencyDto(
     val message: String? = null,
 
     @SerializedName("priority")
-    val priority: String = "HIGH",
+    val priority: String? = null, // Nullable para flexibilidad
 
     @SerializedName("device_info")
-    val deviceInfo: String? = null,
+    @JsonAdapter(JsonMapDeserializer::class)
+    val deviceInfo: Map<String, Any>? = null, // Usar Map para mejor manejo de datos
 
     @SerializedName("response_time")
     val responseTime: Int? = null,
 
     @SerializedName("responder_info")
-    val responderInfo: String? = null
+    @JsonAdapter(JsonMapDeserializer::class)
+    val responderInfo: Map<String, Any>? = null // Usar Map para mejor manejo de datos
 )
 
 data class CreateEmergencyDto(
@@ -54,7 +57,7 @@ data class CreateEmergencyDto(
     val emergencyType: String,
 
     @SerializedName("status")
-    val status: String = "pending",
+    val status: String = "pending", // Valor por defecto más apropiado
 
     @SerializedName("latitude")
     val latitude: Double,
@@ -69,13 +72,16 @@ data class CreateEmergencyDto(
     val message: String? = null,
 
     @SerializedName("priority")
-    val priority: String = "HIGH",
+    val priority: String = "HIGH", // Valor por defecto para emergencias
 
     @SerializedName("device_info")
-    val deviceInfo: String? = null
+    val deviceInfo: Map<String, Any>? = null // Usar Map para consistencia
 )
 
 data class UpdateEmergencyDto(
+    @SerializedName("emergency_type")
+    val emergencyType: String? = null, // Incluir para actualizaciones completas
+
     @SerializedName("status")
     val status: String? = null,
 
@@ -91,9 +97,15 @@ data class UpdateEmergencyDto(
     @SerializedName("message")
     val message: String? = null,
 
+    @SerializedName("priority")
+    val priority: String? = null, // Incluir para actualizaciones de prioridad
+
+    @SerializedName("device_info")
+    val deviceInfo: Map<String, Any>? = null, // Usar Map para consistencia
+
     @SerializedName("response_time")
     val responseTime: Int? = null,
 
     @SerializedName("responder_info")
-    val responderInfo: String? = null
+    val responderInfo: Map<String, Any>? = null // Usar Map para consistencia
 )

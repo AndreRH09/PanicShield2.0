@@ -2,15 +2,17 @@ package com.example.panicshield.di
 
 import android.content.Context
 import com.example.panicshield.data.local.TokenManager
+import com.example.panicshield.data.remote.api.EmergencyApi
 import com.example.panicshield.data.remote.api.AuthApi
 import com.example.panicshield.data.remote.api.ApiConstants
 import com.example.panicshield.data.remote.api.ContactApi
-import com.example.panicshield.data.remote.api.EmergencyApi
 
-import com.example.panicshield.data.repository.AuthRepository
-import com.example.panicshield.data.repository.EmergencyRepository
+// Imports actualizados según la nueva estructura
+import com.example.panicshield.data.remote.repository.AuthRepository
+import com.example.panicshield.data.remote.repository.EmergencyRepository
 import com.example.panicshield.domain.usecase.EmergencyUseCase
 import com.example.panicshield.domain.usecase.LocationUseCase
+
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import dagger.Module
@@ -71,11 +73,14 @@ object NetworkModule {
             .build()
     }
 
+    // ===== APIS =====
+
     @Provides
     @Singleton
     fun provideAuthApi(retrofit: Retrofit): AuthApi {
         return retrofit.create(AuthApi::class.java)
     }
+
     @Provides
     @Singleton
     fun provideEmergencyApi(retrofit: Retrofit): EmergencyApi {
@@ -84,9 +89,19 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideContactApi(retrofit: Retrofit): ContactApi {
+        return retrofit.create(ContactApi::class.java)
+    }
+
+    // ===== UTILITIES =====
+
+    @Provides
+    @Singleton
     fun provideTokenManager(@ApplicationContext context: Context): TokenManager {
         return TokenManager(context)
     }
+
+    // ===== REPOSITORIES =====
 
     @Provides
     @Singleton
@@ -100,22 +115,15 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideContactApi(retrofit: Retrofit): ContactApi {
-        return retrofit.create(ContactApi::class.java)
-    }
-
-    @Provides
-    @Singleton
     fun provideEmergencyRepository(
         emergencyApi: EmergencyApi,
         tokenManager: TokenManager
     ): EmergencyRepository {
-        return EmergencyRepository(emergencyApi)
+        return EmergencyRepository(emergencyApi, tokenManager)
     }
 
     // ===== USE CASES =====
 
-    // ✅ AGREGAR ESTE - EmergencyUseCase
     @Provides
     @Singleton
     fun provideEmergencyUseCase(
@@ -125,11 +133,9 @@ object NetworkModule {
         return EmergencyUseCase(emergencyRepository)
     }
 
-    // ✅ AGREGAR ESTE - LocationUseCase
     @Provides
     @Singleton
     fun provideLocationUseCase(
         @ApplicationContext context: Context
     ): LocationUseCase = LocationUseCase(context)
-
 }
