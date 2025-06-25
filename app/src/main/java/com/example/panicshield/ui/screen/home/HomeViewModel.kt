@@ -3,7 +3,7 @@ package com.example.panicshield.ui.screen.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.panicshield.data.local.TokenManager
-import com.example.panicshield.data.remote.repository.EmergencyResult
+import com.example.panicshield.data.repository.EmergencyResult
 import com.example.panicshield.domain.usecase.EmergencyUseCase
 import com.example.panicshield.domain.usecase.LocationUseCase
 import com.example.panicshield.domain.model.*

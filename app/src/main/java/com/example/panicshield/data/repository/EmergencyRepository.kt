@@ -1,4 +1,4 @@
-package com.example.panicshield.data.remote.repository
+package com.example.panicshield.data.repository
 
 import com.example.panicshield.data.local.TokenManager
 import com.example.panicshield.data.remote.api.EmergencyApi

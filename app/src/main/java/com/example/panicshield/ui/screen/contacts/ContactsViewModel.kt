@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.panicshield.domain.model.Contact
 import com.example.panicshield.domain.model.PhoneContact
 import com.example.panicshield.domain.usecase.ContactUseCase
+import com.example.panicshield.utils.Resource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,21 +27,59 @@ class ContactsViewModel @Inject constructor(
 
     fun loadContacts() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            contactUseCase.getContacts().collect { resource ->
+                when (resource) {
+                    is Resource.Loading -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = true,
+                            contacts = resource.data ?: emptyList(),
+                            errorMessage = null
+                        )
+                    }
+                    is Resource.Success -> {
+                        _uiState.value = _uiState.value.copy(
+                            contacts = resource.data ?: emptyList(),
+                            isLoading = false,
+                            errorMessage = null
+                        )
+                    }
+                    is Resource.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            contacts = resource.data ?: _uiState.value.contacts,
+                            errorMessage = resource.message
+                        )
+                    }
+                }
+            }
+        }
+    }
 
-            contactUseCase.getContacts()
-                .onSuccess { contacts ->
-                    _uiState.value = _uiState.value.copy(
-                        contacts = contacts,
-                        isLoading = false
-                    )
+    fun syncContacts() {
+        viewModelScope.launch {
+            contactUseCase.syncContacts().collect { resource ->
+                when (resource) {
+                    is Resource.Loading -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = true,
+                            contacts = resource.data ?: _uiState.value.contacts
+                        )
+                    }
+                    is Resource.Success -> {
+                        _uiState.value = _uiState.value.copy(
+                            contacts = resource.data ?: emptyList(),
+                            isLoading = false,
+                            errorMessage = null
+                        )
+                    }
+                    is Resource.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = resource.message
+                        )
+                    }
                 }
-                .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "Error al cargar contactos"
-                    )
-                }
+            }
         }
     }
 
@@ -224,6 +263,8 @@ data class ContactsUiState(
     val isCreating: Boolean = false,
     val isUpdating: Boolean = false,
     val isDeleting: Boolean = false,
+    val isSyncing: Boolean = false,
+    val syncError: String? = null,
     val errorMessage: String? = null,
     val showAddDialog: Boolean = false,
     val showEditDialog: Boolean = false,

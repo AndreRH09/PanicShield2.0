@@ -2,11 +2,12 @@ package com.example.panicshield.ui.screen.contacts.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContactPhone
-import androidx.compose.material.icons.filled.ImportContacts
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.ContactPage
+import androidx.compose.material.icons.filled.Contacts
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -16,6 +17,8 @@ import androidx.compose.ui.unit.dp
 fun EmptyContactsState(
     onAddContact: () -> Unit,
     onImportContacts: () -> Unit,
+    onSync: () -> Unit, // Parámetro faltante
+    isSyncing: Boolean = false, // Parámetro faltante
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -24,9 +27,9 @@ fun EmptyContactsState(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            Icons.Default.ContactPhone,
+            Icons.Default.ContactPage,
             contentDescription = null,
-            modifier = Modifier.size(80.dp),
+            modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
@@ -35,38 +38,61 @@ fun EmptyContactsState(
         Text(
             text = "No tienes contactos de emergencia",
             style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Agrega contactos para poder solicitar ayuda rápidamente",
+            text = "Agrega contactos para tenerlos disponibles en caso de emergencia",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp),
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
+        // Botón para agregar contacto manual
         Button(
             onClick = onAddContact,
-            modifier = Modifier.fillMaxWidth(0.7f)
+            enabled = !isSyncing
         ) {
-            Icon(Icons.Default.Add, contentDescription = null)
+            Icon(Icons.Default.PersonAdd, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Agregar Contacto")
+            Text("Agregar contacto")
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
+        // Botón para importar contactos
         OutlinedButton(
             onClick = onImportContacts,
-            modifier = Modifier.fillMaxWidth(0.7f)
+            enabled = !isSyncing
         ) {
-            Icon(Icons.Default.ImportContacts, contentDescription = null)
+            Icon(Icons.Default.Contacts, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Importar del Teléfono")
+            Text("Importar del teléfono")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Botón para sincronizar
+        TextButton(
+            onClick = onSync,
+            enabled = !isSyncing
+        ) {
+            if (isSyncing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sincronizando...")
+            } else {
+                Icon(Icons.Default.CloudSync, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sincronizar con servidor")
+            }
         }
     }
 }

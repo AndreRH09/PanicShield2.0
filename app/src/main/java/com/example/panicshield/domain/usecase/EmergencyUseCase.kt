@@ -1,12 +1,11 @@
 package com.example.panicshield.domain.usecase
 
-import com.example.panicshield.data.remote.repository.EmergencyRepository
-import com.example.panicshield.data.remote.repository.EmergencyResult
-import com.example.panicshield.data.remote.repository.toEmergencyResult
+import com.example.panicshield.data.repository.EmergencyRepository
+import com.example.panicshield.data.repository.EmergencyResult
+import com.example.panicshield.data.repository.toEmergencyResult
 
 import com.example.panicshield.domain.model.*
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 

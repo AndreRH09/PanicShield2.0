@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,15 +49,43 @@ fun ContactsScreen(
         }
     }
 
+    // Estado para mostrar SnackBar de sincronización
+    var showSyncMessage by remember { mutableStateOf(false) }
+    var syncMessage by remember { mutableStateOf("") }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Contactos de Emergencia") },
                 actions = {
+                    // Botón de actualización rápida (datos locales)
                     IconButton(
-                        onClick = { viewModel.loadContacts() }
+                        onClick = { viewModel.loadContacts() },
+                        enabled = !uiState.isLoading && !uiState.isSyncing
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
+                    }
+
+                    // Botón de sincronización (forzar desde servidor)
+                    IconButton(
+                        onClick = {
+                            viewModel.syncContacts()
+                            syncMessage = "Sincronizando con el servidor..."
+                            showSyncMessage = true
+                        },
+                        enabled = !uiState.isLoading && !uiState.isSyncing
+                    ) {
+                        if (uiState.isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.CloudSync,
+                                contentDescription = "Sincronizar con servidor"
+                            )
+                        }
                     }
                 }
             )
@@ -64,7 +93,49 @@ fun ContactsScreen(
         floatingActionButton = {
             ContactsFab(
                 onAddContact = { viewModel.showAddDialog() },
-                onImportFromPhone = handleImportContacts
+                onImportFromPhone = handleImportContacts,
+                enabled = !uiState.isLoading && !uiState.isSyncing
+            )
+        },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = remember { SnackbarHostState() }.apply {
+                    LaunchedEffect(showSyncMessage) {
+                        if (showSyncMessage) {
+                            showSnackbar(
+                                message = syncMessage,
+                                duration = SnackbarDuration.Short
+                            )
+                            showSyncMessage = false
+                        }
+                    }
+
+                    // Mostrar mensaje cuando termine la sincronización
+                    LaunchedEffect(uiState.isSyncing) {
+                        if (!uiState.isSyncing && syncMessage.isNotEmpty()) {
+                            showSnackbar(
+                                message = "Contactos sincronizados correctamente",
+                                duration = SnackbarDuration.Short
+                            )
+                            syncMessage = ""
+                        }
+                    }
+
+                    // Mostrar mensaje de error de sincronización
+                    LaunchedEffect(uiState.syncError) {
+                        uiState.syncError?.let { error ->
+                            showSnackbar(
+                                message = "Error al sincronizar: $error",
+                                duration = SnackbarDuration.Long,
+                                actionLabel = "Reintentar"
+                            ).let { result ->
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.syncContacts()
+                                }
+                            }
+                        }
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -74,6 +145,8 @@ fun ContactsScreen(
             onImportContacts = handleImportContacts,
             onEditContact = { viewModel.showEditDialog(it) },
             onDeleteContact = { viewModel.showDeleteDialog(it) },
+            onRefresh = { viewModel.loadContacts() },
+            onSync = { viewModel.syncContacts() },
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
@@ -87,10 +160,10 @@ fun ContactsScreen(
         viewModel = viewModel
     )
 
-    // Error handling
+    // Error handling general
     uiState.errorMessage?.let { error ->
         LaunchedEffect(error) {
-            //  manejar errores
+            // Manejar errores generales si es necesario
         }
     }
 }
@@ -102,22 +175,65 @@ private fun ContactsContent(
     onImportContacts: () -> Unit,
     onEditContact: (com.example.panicshield.domain.model.Contact) -> Unit,
     onDeleteContact: (com.example.panicshield.domain.model.Contact) -> Unit,
+    onRefresh: () -> Unit,
+    onSync: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Indicador de estado de sincronización
+    if (uiState.isSyncing) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Sincronizando contactos...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+    }
+
     when {
-        uiState.isLoading -> {
+        uiState.isLoading && uiState.contacts.isEmpty() -> {
             Box(
                 modifier = modifier,
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Cargando contactos...",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
 
-        uiState.contacts.isEmpty() -> {
+        uiState.contacts.isEmpty() && !uiState.isLoading -> {
             EmptyContactsState(
                 onAddContact = onAddContact,
                 onImportContacts = onImportContacts,
+                onSync = onSync,
+                isSyncing = uiState.isSyncing,
                 modifier = modifier
             )
         }
@@ -127,6 +243,9 @@ private fun ContactsContent(
                 contacts = uiState.contacts,
                 onEditContact = onEditContact,
                 onDeleteContact = onDeleteContact,
+                isLoading = uiState.isLoading,
+                isSyncing = uiState.isSyncing,
+                onRefresh = onRefresh,
                 modifier = modifier
             )
         }

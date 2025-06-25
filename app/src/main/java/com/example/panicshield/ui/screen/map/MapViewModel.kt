@@ -3,7 +3,7 @@ package com.example.panicshield.ui.screen.map
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.panicshield.data.remote.repository.EmergencyRepository
+import com.example.panicshield.data.repository.EmergencyRepository
 import com.example.panicshield.domain.model.Emergency
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow

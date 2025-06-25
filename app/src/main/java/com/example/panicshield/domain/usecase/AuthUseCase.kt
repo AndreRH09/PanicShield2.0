@@ -1,6 +1,6 @@
 package com.example.panicshield.domain.usecase
 
-import com.example.panicshield.data.remote.repository.AuthRepository
+import com.example.panicshield.data.repository.AuthRepository
 import com.example.panicshield.domain.model.AuthResponse
 import com.example.panicshield.domain.model.AuthResult
 import com.example.panicshield.domain.model.User

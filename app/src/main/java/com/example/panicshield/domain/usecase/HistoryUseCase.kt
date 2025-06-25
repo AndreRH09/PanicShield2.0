@@ -1,6 +1,6 @@
 package com.example.panicshield.domain.usecase
 
-import com.example.panicshield.data.remote.repository.EmergencyRepository
+import com.example.panicshield.data.repository.EmergencyRepository
 import com.example.panicshield.domain.model.*
 import java.text.SimpleDateFormat
 import java.util.*
