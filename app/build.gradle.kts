@@ -75,6 +75,9 @@ dependencies {
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.sqlite.android)
+    implementation(libs.androidx.room.runtime.android)
+    implementation(libs.androidx.room.common.jvm)
 
     // Testing
     testImplementation(libs.junit)
