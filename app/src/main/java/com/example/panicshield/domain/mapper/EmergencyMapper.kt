@@ -5,7 +5,10 @@ import com.example.panicshield.data.remote.dto.CreateEmergencyDto
 import com.example.panicshield.data.remote.dto.UpdateEmergencyDto
 import com.example.panicshield.domain.model.*
 import com.google.gson.Gson
-
+import com.example.panicshield.data.local.entity.EmergencyHistoryCacheEntity
+import com.example.panicshield.domain.usecase.EmergencyHistory
+import java.text.SimpleDateFormat
+import java.util.*
 // Extensión para convertir DTO a Domain Model (compatible con el modelo actual)
 fun EmergencyDto.toDomainModel(): Emergency {
     return Emergency(
@@ -153,5 +156,69 @@ fun parseResponderInfo(responderInfo: Map<String, Any>?): ResponderInfo? {
         } catch (e: Exception) {
             null
         }
+    }
+}
+
+// Emergency → CacheEntity
+fun Emergency.toCacheEntity(): EmergencyHistoryCacheEntity {
+    return EmergencyHistoryCacheEntity(
+        id = this.id ?: 0L,
+        userId = this.userId,
+        emergencyType = this.emergencyType,
+        status = this.status,
+        latitude = this.latitude ?: 0.0,
+        longitude = this.longitude ?: 0.0,
+        address = this.address,
+        message = this.message,
+        createdAt = parseTimestamp(this.createdAt),
+        updatedAt = this.updatedAt?.let { parseTimestamp(it) },
+        deviceInfo = this.deviceInfo?.toString(),
+        priority = this.priority,
+        responseTime = this.responseTime,
+        lastSyncedAt = System.currentTimeMillis(),
+        needsSync = false
+    )
+}
+
+// CacheEntity → EmergencyHistory
+fun EmergencyHistoryCacheEntity.toEmergencyHistory(): EmergencyHistory {
+    return EmergencyHistory(
+        id = this.id,
+        userId = this.userId,
+        emergencyType = this.emergencyType,
+        status = EmergencyStatus.fromApiValue(this.status),
+        latitude = this.latitude,
+        longitude = this.longitude,
+        address = this.address,
+        message = this.message,
+        createdAt = this.createdAt,
+        updatedAt = this.updatedAt,
+        deviceInfo = this.deviceInfo,
+        priority = this.priority,
+        responseTime = this.responseTime
+    )
+}
+
+// Función helper para timestamps (reutilizar la misma lógica que ya tienes en HistoryUseCase)
+private fun parseTimestamp(timestamp: String?): Long {
+    return try {
+        if (timestamp.isNullOrBlank()) {
+            return System.currentTimeMillis()
+        }
+
+        val cleanTimestamp = timestamp
+            .replace("T", " ")
+            .split(".")[0]
+            .split("+")[0]
+            .trim()
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        formatter.timeZone = TimeZone.getTimeZone("UTC")
+
+        val date = formatter.parse(cleanTimestamp)
+        date?.time ?: System.currentTimeMillis()
+
+    } catch (e: Exception) {
+        System.currentTimeMillis()
     }
 }

@@ -1,7 +1,13 @@
 package com.example.panicshield.domain.usecase
 
+import com.example.panicshield.data.local.TokenManager
+import com.example.panicshield.data.local.dao.EmergencyHistoryDao
 import com.example.panicshield.data.remote.repository.EmergencyRepository
+import com.example.panicshield.data.sync.SimpleSyncManager
+import com.example.panicshield.domain.mapper.toCacheEntity
+import com.example.panicshield.domain.mapper.toEmergencyHistory
 import com.example.panicshield.domain.model.*
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
@@ -18,38 +24,63 @@ sealed class EmergencyResult<out T> {
 
 @Singleton
 class HistoryUseCase @Inject constructor(
-    private val emergencyRepository: EmergencyRepository
+    private val emergencyRepository: EmergencyRepository,
+    private val localDao: EmergencyHistoryDao, // NUEVO
+    private val syncManager: SimpleSyncManager, // NUEVO
+    private val tokenManager: TokenManager // NUEVO
+
 ) {
 
     suspend fun getEmergencyHistory(): EmergencyResult<List<EmergencyHistory>> {
         return try {
-            val result = emergencyRepository.getEmergencyHistory()
+            val userId = tokenManager.getUserId().first() ?: ""
 
-            when {
-                result.isSuccess -> {
-                    val emergencies = result.getOrNull() ?: emptyList()
-                    val history = emergencies.map { emergency ->
-                        EmergencyHistory(
-                            id = emergency.id,
-                            userId = emergency.userId,
-                            emergencyType = emergency.emergencyType,
-                            status = emergency.statusEnum,
-                            latitude = emergency.latitude ?: 0.0,
-                            longitude = emergency.longitude ?: 0.0,
-                            address = emergency.address,
-                            message = emergency.message,
-                            createdAt = parseTimestamp(emergency.createdAt),
-                            updatedAt = emergency.updatedAt?.let { parseTimestamp(it) },
-                            deviceInfo = emergency.deviceInfo?.let { convertMapToString(it) },
-                            priority = emergency.priority,
-                            responseTime = emergency.responseTime
-                        )
-                    }.sortedByDescending { it.createdAt }
+            // 1. Intentar sincronizar si hay conexión
+            syncManager.syncIfConnected()
 
-                    EmergencyResult.Success(history)
-                }
-                else -> {
-                    EmergencyResult.Error(result.exceptionOrNull() ?: Exception("Unknown error"))
+            // 2. Obtener datos del cache local
+            val localData = localDao.getHistoryByUser(userId)
+
+            if (localData.isNotEmpty()) {
+                // Devolver datos del cache
+                val history = localData.map { it.toEmergencyHistory() }
+                    .sortedByDescending { it.createdAt }
+
+                EmergencyResult.Success(history)
+            } else {
+                // Si no hay cache, intentar API directamente
+                val result = emergencyRepository.getEmergencyHistory()
+
+                when {
+                    result.isSuccess -> {
+                        val emergencies = result.getOrNull() ?: emptyList()
+                        val history = emergencies.map { emergency ->
+                            EmergencyHistory(
+                                id = emergency.id,
+                                userId = emergency.userId,
+                                emergencyType = emergency.emergencyType,
+                                status = emergency.statusEnum,
+                                latitude = emergency.latitude ?: 0.0,
+                                longitude = emergency.longitude ?: 0.0,
+                                address = emergency.address,
+                                message = emergency.message,
+                                createdAt = parseTimestamp(emergency.createdAt),
+                                updatedAt = emergency.updatedAt?.let { parseTimestamp(it) },
+                                deviceInfo = emergency.deviceInfo?.let { convertMapToString(it) },
+                                priority = emergency.priority,
+                                responseTime = emergency.responseTime
+                            )
+                        }.sortedByDescending { it.createdAt }
+
+                        // Guardar en cache para próxima vez
+                        val cacheEntities = emergencies.map { it.toCacheEntity() }
+                        localDao.insertAll(cacheEntities)
+
+                        EmergencyResult.Success(history)
+                    }
+                    else -> {
+                        EmergencyResult.Error(result.exceptionOrNull() ?: Exception("Unknown error"))
+                    }
                 }
             }
         } catch (e: Exception) {

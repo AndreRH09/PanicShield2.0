@@ -58,6 +58,10 @@ dependencies {
     implementation("com.mapbox.maps:android:11.12.2")
     implementation("com.mapbox.extension:maps-compose:11.12.2")
 
+    //Room Database
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
     // Ktor (necesario para Supabase)
     implementation("io.ktor:ktor-client-android:2.3.7")
 
