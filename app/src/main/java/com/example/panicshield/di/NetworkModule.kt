@@ -33,14 +33,6 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideGson(): Gson {
-        return GsonBuilder()
-            .setLenient()
-            .create()
-    }
-
-    @Provides
-    @Singleton
     fun provideHttpLoggingInterceptor(): HttpLoggingInterceptor {
         return HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
@@ -72,70 +64,4 @@ object NetworkModule {
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
     }
-
-    // ===== APIS =====
-
-    @Provides
-    @Singleton
-    fun provideAuthApi(retrofit: Retrofit): AuthApi {
-        return retrofit.create(AuthApi::class.java)
-    }
-
-    @Provides
-    @Singleton
-    fun provideEmergencyApi(retrofit: Retrofit): EmergencyApi {
-        return retrofit.create(EmergencyApi::class.java)
-    }
-
-    @Provides
-    @Singleton
-    fun provideContactApi(retrofit: Retrofit): ContactApi {
-        return retrofit.create(ContactApi::class.java)
-    }
-
-    // ===== UTILITIES =====
-
-    @Provides
-    @Singleton
-    fun provideTokenManager(@ApplicationContext context: Context): TokenManager {
-        return TokenManager(context)
-    }
-
-    // ===== REPOSITORIES =====
-
-    @Provides
-    @Singleton
-    fun provideAuthRepository(
-        authApi: AuthApi,
-        tokenManager: TokenManager,
-        gson: Gson
-    ): AuthRepository {
-        return AuthRepository(authApi, tokenManager, gson)
-    }
-
-    @Provides
-    @Singleton
-    fun provideEmergencyRepository(
-        emergencyApi: EmergencyApi,
-        tokenManager: TokenManager
-    ): EmergencyRepository {
-        return EmergencyRepository(emergencyApi, tokenManager)
-    }
-
-    // ===== USE CASES =====
-
-    @Provides
-    @Singleton
-    fun provideEmergencyUseCase(
-        emergencyRepository: EmergencyRepository,
-        tokenManager: TokenManager
-    ): EmergencyUseCase {
-        return EmergencyUseCase(emergencyRepository)
-    }
-
-    @Provides
-    @Singleton
-    fun provideLocationUseCase(
-        @ApplicationContext context: Context
-    ): LocationUseCase = LocationUseCase(context)
 }

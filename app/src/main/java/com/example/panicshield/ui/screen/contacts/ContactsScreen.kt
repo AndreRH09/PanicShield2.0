@@ -1,21 +1,20 @@
 package com.example.panicshield.ui.screen.contacts
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.panicshield.ui.screen.contacts.components.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,170 +23,173 @@ fun ContactsScreen(
     modifier: Modifier = Modifier,
     viewModel: ContactsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // Launcher para solicitar permisos de contactos
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            viewModel.showPhoneContactsDialog()
-        }
-    }
-
-    // Función para manejar la importación de contactos
-    val handleImportContacts = {
-        when (PackageManager.PERMISSION_GRANTED) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) -> {
-                viewModel.showPhoneContactsDialog()
-            }
-            else -> {
-                permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
-            }
+    // Manejar errores con SnackBar
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { error ->
+            // Aquí podrías mostrar un SnackBar si tienes acceso al SnackBarHostState
+            // Por ahora solo limpiamos el error después de mostrarlo
+            viewModel.clearErrorMessage()
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Contactos de Emergencia") },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.loadContacts() }
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Actualizar")
-                    }
-                }
+                title = {
+                    Text(
+                        text = "Contactos de Emergencia",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                )
             )
         },
         floatingActionButton = {
-            ContactsFab(
-                onAddContact = { viewModel.showAddDialog() },
-                onImportFromPhone = handleImportContacts
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // FAB para importar desde contactos del teléfono
+                FloatingActionButton(
+                    onClick = { viewModel.showPhoneContactsDialog() },
+                    containerColor = MaterialTheme.colorScheme.secondary
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Contacts,
+                        contentDescription = "Importar contactos"
+                    )
+                }
+
+                // FAB principal para agregar contacto
+                FloatingActionButton(
+                    onClick = { viewModel.showAddDialog() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Agregar contacto"
+                    )
+                }
+            }
         }
     ) { paddingValues ->
-        ContactsContent(
-            uiState = uiState,
-            onAddContact = { viewModel.showAddDialog() },
-            onImportContacts = handleImportContacts,
-            onEditContact = { viewModel.showEditDialog(it) },
-            onDeleteContact = { viewModel.showDeleteDialog(it) },
+        Box(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
-        )
-    }
+        ) {
+            when {
+                uiState.isLoading && uiState.contacts.isEmpty() -> {
+                    ContactsLoadingIndicator(
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
 
-    // Dialogs
-    ContactsDialogs(
-        uiState = uiState,
-        viewModel = viewModel
-    )
+                uiState.contacts.isEmpty() && !uiState.isLoading -> {
+                    ContactsEmptyState(
+                        onAddContactClick = { viewModel.showAddDialog() },
+                        onImportContactsClick = { viewModel.showPhoneContactsDialog() },
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
 
-    // Error handling
-    uiState.errorMessage?.let { error ->
-        LaunchedEffect(error) {
-            //  manejar errores
-        }
-    }
-}
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Indicador de carga en la parte superior si está refrescando
+                        if (uiState.isLoading) {
+                            item {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
 
-@Composable
-private fun ContactsContent(
-    uiState: ContactsUiState,
-    onAddContact: () -> Unit,
-    onImportContacts: () -> Unit,
-    onEditContact: (com.example.panicshield.domain.model.Contact) -> Unit,
-    onDeleteContact: (com.example.panicshield.domain.model.Contact) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    when {
-        uiState.isLoading -> {
-            Box(
-                modifier = modifier,
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
+                        // Mensaje de error si existe
+                        uiState.errorMessage?.let { error ->
+                            item {
+                                ContactsErrorMessage(
+                                    message = error,
+                                    onRetry = { viewModel.refreshContacts() },
+                                    onDismiss = { viewModel.clearErrorMessage() }
+                                )
+                            }
+                        }
+
+                        // Lista de contactos
+                        items(
+                            items = uiState.contacts,
+                            key = { contact -> contact.id ?: 0 }
+                        ) { contact ->
+                            ContactCard(
+                                contact = contact,
+                                onEditClick = { viewModel.showEditDialog(contact) },
+                                onDeleteClick = { viewModel.showDeleteDialog(contact) }
+                            )
+                        }
+                    }
+                }
             }
         }
-
-        uiState.contacts.isEmpty() -> {
-            EmptyContactsState(
-                onAddContact = onAddContact,
-                onImportContacts = onImportContacts,
-                modifier = modifier
-            )
-        }
-
-        else -> {
-            ContactsList(
-                contacts = uiState.contacts,
-                onEditContact = onEditContact,
-                onDeleteContact = onDeleteContact,
-                modifier = modifier
-            )
-        }
     }
-}
 
-@Composable
-private fun ContactsDialogs(
-    uiState: ContactsUiState,
-    viewModel: ContactsViewModel
-) {
-    // Add Contact Dialog
+    // Diálogos
     if (uiState.showAddDialog) {
-        ContactDialog(
+        AddEditContactDialog(
             title = "Agregar Contacto",
             name = uiState.dialogName,
             phone = uiState.dialogPhone,
             onNameChange = viewModel::updateDialogName,
             onPhoneChange = viewModel::updateDialogPhone,
-            onConfirm = { viewModel.createContact(uiState.dialogName, uiState.dialogPhone) },
+            onConfirm = { name, phone ->
+                viewModel.createContact(name, phone)
+            },
             onDismiss = { viewModel.hideAddDialog() },
-            isLoading = uiState.isCreating
+            isLoading = uiState.isCreating,
+            confirmButtonText = "Agregar"
         )
     }
 
-    // Edit Contact Dialog
     if (uiState.showEditDialog && uiState.editingContact != null) {
-        ContactDialog(
+        AddEditContactDialog(
             title = "Editar Contacto",
             name = uiState.dialogName,
             phone = uiState.dialogPhone,
             onNameChange = viewModel::updateDialogName,
             onPhoneChange = viewModel::updateDialogPhone,
-            onConfirm = {
-                viewModel.updateContact(
-                    uiState.editingContact!!.id!!,
-                    uiState.dialogName,
-                    uiState.dialogPhone
-                )
+            onConfirm = { name, phone ->
+                viewModel.updateContact(uiState.editingContact!!.id!!, name, phone)
             },
             onDismiss = { viewModel.hideEditDialog() },
-            isLoading = uiState.isUpdating
+            isLoading = uiState.isUpdating,
+            confirmButtonText = "Actualizar"
         )
     }
 
-    // Delete Contact Dialog
     if (uiState.showDeleteDialog && uiState.contactToDelete != null) {
         DeleteContactDialog(
             contactName = uiState.contactToDelete!!.name,
-            onConfirm = { viewModel.deleteContact(uiState.contactToDelete!!.id!!) },
+            onConfirm = {
+                viewModel.deleteContact(uiState.contactToDelete!!.id!!)
+            },
             onDismiss = { viewModel.hideDeleteDialog() },
             isLoading = uiState.isDeleting
         )
     }
 
-    // Phone Contacts Dialog
     if (uiState.showPhoneContactsDialog) {
         PhoneContactsDialog(
             phoneContacts = uiState.phoneContacts,
             isLoading = uiState.isLoadingPhoneContacts,
-            onContactSelected = viewModel::selectPhoneContact,
+            onContactSelect = viewModel::selectPhoneContact,
             onDismiss = { viewModel.hidePhoneContactsDialog() }
         )
     }

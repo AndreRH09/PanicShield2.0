@@ -2,6 +2,7 @@ package com.example.panicshield.ui.screen.contacts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.panicshield.data.util.Resource
 import com.example.panicshield.domain.model.Contact
 import com.example.panicshield.domain.model.PhoneContact
 import com.example.panicshield.domain.usecase.ContactUseCase
@@ -9,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,22 +28,37 @@ class ContactsViewModel @Inject constructor(
 
     fun loadContacts() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
-            contactUseCase.getContacts()
-                .onSuccess { contacts ->
-                    _uiState.value = _uiState.value.copy(
-                        contacts = contacts,
-                        isLoading = false
-                    )
+            contactUseCase.getContacts().collectLatest { resource ->
+                when (resource) {
+                    is Resource.Loading -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = true,
+                            contacts = resource.data ?: emptyList(),
+                            errorMessage = null
+                        )
+                    }
+                    is Resource.Success -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            contacts = resource.data ?: emptyList(),
+                            errorMessage = null
+                        )
+                    }
+                    is Resource.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            contacts = resource.data ?: emptyList(),
+                            errorMessage = resource.message
+                        )
+                    }
                 }
-                .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "Error al cargar contactos"
-                    )
-                }
+            }
         }
+    }
+
+    fun refreshContacts() {
+        // Forzar actualización desde la red
+        loadContacts()
     }
 
     fun loadPhoneContacts() {
@@ -71,11 +88,11 @@ class ContactsViewModel @Inject constructor(
             contactUseCase.createContact(name, phone)
                 .onSuccess { contact ->
                     _uiState.value = _uiState.value.copy(
-                        contacts = _uiState.value.contacts + contact,
                         isCreating = false,
                         showAddDialog = false
                     )
                     clearDialogFields()
+                    // Los datos se actualizarán automáticamente a través del Flow de getContacts()
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -92,16 +109,13 @@ class ContactsViewModel @Inject constructor(
 
             contactUseCase.updateContact(id, name, phone)
                 .onSuccess { updatedContact ->
-                    val updatedContacts = _uiState.value.contacts.map { contact ->
-                        if (contact.id == id) updatedContact else contact
-                    }
                     _uiState.value = _uiState.value.copy(
-                        contacts = updatedContacts,
                         isUpdating = false,
                         showEditDialog = false,
                         editingContact = null
                     )
                     clearDialogFields()
+                    // Los datos se actualizarán automáticamente a través del Flow de getContacts()
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -118,13 +132,12 @@ class ContactsViewModel @Inject constructor(
 
             contactUseCase.deleteContact(id)
                 .onSuccess {
-                    val updatedContacts = _uiState.value.contacts.filter { it.id != id }
                     _uiState.value = _uiState.value.copy(
-                        contacts = updatedContacts,
                         isDeleting = false,
                         showDeleteDialog = false,
                         contactToDelete = null
                     )
+                    // Los datos se actualizarán automáticamente a través del Flow de getContacts()
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -135,6 +148,7 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
+    // Métodos de UI (sin cambios)
     fun showAddDialog() {
         _uiState.value = _uiState.value.copy(showAddDialog = true)
     }
