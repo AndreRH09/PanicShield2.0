@@ -182,7 +182,6 @@ class EmergencyUseCase @Inject constructor(
     }
 
     // ===== FUNCIONES HELPER PRIVADAS =====
-
     private fun createDeviceInfoMap(): Map<String, Any> {
         return mapOf(
             "model" to android.os.Build.MODEL,

@@ -7,7 +7,7 @@ import com.example.panicshield.data.local.dao.EmergencyHistoryDao
 import com.example.panicshield.data.remote.repository.EmergencyRepository
 import com.example.panicshield.data.local.TokenManager
 import com.example.panicshield.domain.mapper.toCacheEntity
-import kotlinx.coroutines.flow.first
+import dagger.hilt.android.qualifiers.ApplicationContext // AGREGAR ESTE IMPORT
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,7 +16,7 @@ class SimpleSyncManager @Inject constructor(
     private val localDao: EmergencyHistoryDao,
     private val emergencyRepository: EmergencyRepository,
     private val tokenManager: TokenManager,
-    private val context: Context
+    @ApplicationContext private val context: Context // CAMBIAR ESTA LÍNEA
 ) {
 
     suspend fun syncIfConnected(): Boolean {

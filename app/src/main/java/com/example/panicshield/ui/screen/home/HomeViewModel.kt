@@ -139,7 +139,6 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 is EmergencyResult.Loading -> {
-                    // Ya manejado arriba
                 }
             }
         }
@@ -213,7 +212,6 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 is EmergencyResult.Loading -> {
-                    // Ya manejado arriba
                 }
             }
         }
@@ -259,7 +257,7 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 is EmergencyResult.Loading -> {
-                    // Ya manejado arriba
+
                 }
             }
         }
@@ -378,7 +376,6 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 is EmergencyResult.Loading -> {
-                    // Ya manejado arriba
                 }
             }
         } catch (e: Exception) {
