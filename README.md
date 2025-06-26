@@ -1,3 +1,5 @@
+##"¿Cómo se podría sincronizar cuando un dato se modificó en el backend? Por ejemplo, tenemos una app para compra de pasajes de bus, el usuario selecciona un asiento y mientras llena algunos datos, otro usuario compro el asiento?"
+
 # Sincronización de Datos Modificados en el Backend en Aplicaciones Multiusuario
 
 ## Contexto
@@ -100,7 +102,33 @@ fun reserveSeat(userId: String, seatId: String) {
 
 La transacción asegura que dos solicitudes simultáneas no puedan reservar el mismo asiento. Este enfoque es crucial en sistemas críticos [4].
 
+---
 
+## Sobre las Referencias
+
+### [1] Martin Fowler – *Patterns of Enterprise Application Architecture*
+
+> Fowler describe patrones como la validación previa a confirmaciones críticas. Este patrón es útil cuando múltiples usuarios acceden simultáneamente al mismo recurso.
+
+---
+
+### [2] Eric Evans – *Domain-Driven Design*
+
+> Evans sugiere modelar reglas del negocio explícitamente. Un bloqueo de asiento no es solo una técnica, sino una expresión de la intención del usuario en el dominio.
+
+---
+
+### [3] B. Burns, J. Beda y K. Hightower – *Kubernetes: Up and Running*
+
+> El libro explica cómo manejar eventos distribuidos y sincronización de estados, lo cual es directamente aplicable a sistemas multiusuario con cambios frecuentes.
+
+---
+
+### [4] C. J. Date – *Introducción a los Sistemas de Bases de Datos*
+
+> Date explica cómo las transacciones aseguran la integridad y consistencia cuando múltiples usuarios acceden al mismo recurso concurrentemente.
+
+---
 
 ## Referencias
 
