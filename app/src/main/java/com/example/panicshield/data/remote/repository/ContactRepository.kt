@@ -32,7 +32,7 @@ class ContactRepository @Inject constructor(
 ) {
 
     /**
-     * Obtiene los contactos usando el patrón NetworkBoundResource
+     * obtiene los contactos usando el patrón NetworkBoundResource
      */
     fun getContacts(): Flow<Resource<List<Contact>>> {
         return tokenManager.getUserId().flatMapLatest { userId ->
