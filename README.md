@@ -1,32 +1,22 @@
-# Configuración Inicial
+# Sincronización de Datos Modificados en el Backend en Aplicaciones Multiusuario
 
-## Actualizar el Build.Graddle.kts
-Para evitar errores en la compilacion, se necesita actualizar  (dentro del archivo cambiar las versiones de 34) a:
-- compileSdk = 35
-- targetSdk = 35
+## Contexto
 
-## Version de gradle 
-8.11.1
+En sistemas multiusuario, como aplicaciones de compra de pasajes, es fundamental sincronizar en tiempo real los cambios críticos que ocurren en el backend. Uno de los casos más comunes es la selección y reserva de asientos. El problema radica en que múltiples usuarios pueden interactuar simultáneamente sobre los mismos recursos, lo cual genera **condiciones de carrera** y **estados inconsistentes** si no se implementan mecanismos de control adecuados.
 
-"¿Cómo se podría sincronizar cuando un dato se modificó en el backend? Por ejemplo, tenemos una app para compra de pasajes de bus, el usuario selecciona un asiento y mientras llena algunos datos, otro usuario compro el asiento?"
+## Problema: Estado Compartido y Cambiante
 
-## ¿Cómo se podría sincronizar cuando un dato se modificó en el backend?
+Cuando un usuario selecciona un asiento, el sistema puede no bloquearlo automáticamente para los demás. Esto da lugar a situaciones como:
 
-En sistemas multiusuario como una aplicación de compra de pasajes, es esencial reflejar de forma inmediata cualquier cambio crítico que ocurra en el backend, especialmente cuando varios usuarios interactúan sobre los mismos recursos (por ejemplo, asientos disponibles). La sincronización periódica no es suficiente en estos casos; se requiere gestión de concurrencia y mecanismos de actualización reactiva.
+> "El asiento ya fue reservado" justo después de llenar los datos.
 
-### Problema: estado compartido y cambiante
+Este problema surge porque varios clientes leen un estado compartido que puede cambiar en cualquier momento entre la selección y la confirmación. La falta de sincronización reactiva y control de concurrencia agrava el riesgo de inconsistencia.
 
-Cuando un usuario selecciona un asiento, ese estado no está bloqueado por defecto para otros usuarios. Si no se maneja adecuadamente, puede ocasionar inconsistencias como:
+## Estrategias para la Sincronización de Datos Modificados
 
-> “El asiento ya fue reservado” justo después de llenar los datos.
+### 1. Verificación Justo Antes de Confirmar (Control Optimista)
 
-Esto ocurre porque múltiples clientes están leyendo un estado compartido que puede cambiar entre la selección y la confirmación.
-
-### Estrategias para sincronizar datos modificados desde el backend
-
-1. Verificación justo antes de confirmar la compra (control optimista)
-
-Antes de realizar la reserva final, el cliente debe verificar que el asiento siga disponible:
+Esta estrategia consiste en verificar la disponibilidad del recurso justo antes de ejecutar la acción definitiva:
 
 ```kotlin
 val response = api.verifySeatAvailability(seatId)
@@ -37,11 +27,13 @@ if (response.isAvailable) {
 }
 ```
 
-Esta estrategia es simple de implementar. Sin embargo, no evita que varios usuarios seleccionen el mismo asiento al mismo tiempo. Su efectividad depende del control transaccional del backend.
+Es simple de implementar, pero no evita conflictos si dos usuarios confirman casi simultáneamente. El backend debe manejar transacciones atómicas para evitar dobles reservas [1].
 
-2. Bloqueo temporal del asiento (reserva provisional)
+---
 
-Una vez que el usuario selecciona un asiento, se puede solicitar un bloqueo temporal al backend:
+### 2. Bloqueo Temporal del Asiento (Reserva Provisional)
+
+El sistema puede bloquear provisionalmente el asiento durante un tiempo limitado cuando el usuario lo selecciona:
 
 ```http
 POST /seats/{id}/hold
@@ -51,18 +43,20 @@ POST /seats/{id}/hold
 }
 ```
 
-El servidor marca el asiento como "temporalmente reservado" para el usuario solicitante. Si la operación no se completa dentro del tiempo especificado, el asiento se libera automáticamente.
+El backend marca el asiento como "en espera". Si no se completa la operación dentro del tiempo especificado, el bloqueo expira automáticamente. La interfaz debe reflejar visualmente el estado de los asientos bloqueados.
 
-Consideraciones importantes:
+**Consideraciones:**
 
-- Se deben limpiar los bloqueos expirados para evitar inconsistencias.
-- La interfaz debe mostrar el estado "en proceso de reserva" para asientos bloqueados por otros.
+- Es obligatorio un proceso de limpieza periódica para liberar los bloqueos expirados.
+- Es eficaz para evitar reservas concurrentes, pero debe combinarse con control de concurrencia en el backend [2].
 
-3. Sincronización en tiempo real (WebSockets, Firebase, etc.)
+---
 
-Cuando se requiere que todos los usuarios vean al instante los cambios de disponibilidad, es recomendable emplear comunicación en tiempo real.
+### 3. Sincronización en Tiempo Real (WebSockets / Firebase)
 
-Ejemplo con Firebase Realtime Database:
+Para aplicaciones altamente concurrentes, la sincronización en tiempo real es esencial. Se puede utilizar Firebase Realtime Database o WebSockets para notificar cambios instantáneamente.
+
+Ejemplo con Firebase:
 
 ```bash
 /buses/{busId}/seats/{seatId} = {
@@ -71,12 +65,12 @@ Ejemplo con Firebase Realtime Database:
 }
 ```
 
-En el cliente, se suscribe a los cambios de estado:
+En el cliente, se suscribe a los eventos:
 
 ```kotlin
 seatsRef.addValueEventListener(object : ValueEventListener {
     override fun onDataChange(snapshot: DataSnapshot) {
-        // Actualizar interfaz en tiempo real
+        // Actualizar UI en tiempo real
     }
 
     override fun onCancelled(error: DatabaseError) {
@@ -85,13 +79,13 @@ seatsRef.addValueEventListener(object : ValueEventListener {
 })
 ```
 
-Esto permite que la interfaz reaccione inmediatamente cuando otro usuario reserva o libera un asiento. Es la opción ideal para aplicaciones con múltiples usuarios concurrentes.
+Este enfoque reduce los errores por lectura de estados obsoletos y mejora la experiencia del usuario [3].
 
-4. Control de concurrencia en el servidor
+---
 
-Incluso si la lógica del cliente es correcta, el backend debe garantizar la atomicidad de las operaciones. Esto evita condiciones de carrera cuando dos usuarios intentan reservar el mismo asiento al mismo tiempo.
+### 4. Control de Concurrencia en el Backend (Transacciones Atómicas)
 
-Ejemplo en un servicio transaccional:
+A pesar de implementar lógica en el cliente, el backend debe garantizar **integridad de datos** mediante operaciones atómicas:
 
 ```kotlin
 @Transactional
@@ -104,5 +98,16 @@ fun reserveSeat(userId: String, seatId: String) {
 }
 ```
 
-Este patrón asegura que solo un usuario pueda reservar el asiento, aunque múltiples solicitudes lleguen casi simultáneamente.
+La transacción asegura que dos solicitudes simultáneas no puedan reservar el mismo asiento. Este enfoque es crucial en sistemas críticos [4].
 
+
+
+## Referencias
+
+[1] M. Fowler, *Patterns of Enterprise Application Architecture*, Addison-Wesley, 2003.
+
+[2] E. Evans, *Domain-Driven Design: Tackling Complexity in the Heart of Software*, Addison-Wesley, 2004.
+
+[3] B. Burns, J. Beda y K. Hightower, *Kubernetes: Up and Running*, O'Reilly Media, 2022.
+
+[4] C. Date, *Introducción a los Sistemas de Bases de Datos*, Prentice Hall, 2001.
