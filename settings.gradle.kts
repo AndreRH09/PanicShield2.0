@@ -25,3 +25,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "PanicShield"
 include(":app")
+include(":supabaseOfflineSupport")
+project(":supabaseOfflineSupport").projectDir = File(rootDir, "SupabaseOfflineSupport")
+
