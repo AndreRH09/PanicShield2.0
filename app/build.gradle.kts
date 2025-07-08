@@ -4,6 +4,7 @@ plugins {
     id("com.google.gms.google-services")
     id("dagger.hilt.android.plugin")
     id("com.google.devtools.ksp") version "1.9.10-1.0.13"  // Replace kapt with KSP
+    kotlin("plugin.serialization") version "1.9.10"
 }
 
 android {
@@ -158,5 +159,15 @@ dependencies {
     implementation("com.google.accompanist:accompanist-swiperefresh:0.34.0")
 
     //serialization - Updated to compatible version
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    // Forzar la versión de serialización compatible con Kotlin 1.9.0
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1") {
+        version {
+            strictly("1.5.1")
+        }
+    }
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.5.1") {
+        version {
+            strictly("1.5.1")
+        }
+    }
 }
