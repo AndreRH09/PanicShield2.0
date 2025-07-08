@@ -1,16 +1,17 @@
+// di/DatabaseModule.kt
 package com.example.panicshield.di
-
-// Imports actualizados según la nueva estructura
 
 import android.content.Context
 import androidx.room.Room
-import com.example.panicshield.data.local.dao.ContactDao
 import com.example.panicshield.data.local.database.AppDatabase
+import com.example.panicshield.data.local.dao.ContactDao
+import com.example.supabaseofflinesupport.SyncManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.jan.supabase.SupabaseClient
 import javax.inject.Singleton
 
 @Module
@@ -19,14 +20,30 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
+    fun provideAppDatabase(
+        @ApplicationContext context: Context
+    ): AppDatabase {
         return Room.databaseBuilder(
             context,
             AppDatabase::class.java,
-            "panicshield_db"
-        ).build()
+            AppDatabase.DATABASE_NAME
+        )
+        .fallbackToDestructiveMigration()
+        .build()
     }
 
     @Provides
-    fun provideContactDao(db: AppDatabase): ContactDao = db.contactDao()
+    @Singleton
+    fun provideContactDao(database: AppDatabase): ContactDao {
+        return database.contactDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSyncManager(
+        @ApplicationContext context: Context,
+        supabaseClient: SupabaseClient
+    ): SyncManager {
+        return SyncManager(context, supabaseClient)
+    }
 }

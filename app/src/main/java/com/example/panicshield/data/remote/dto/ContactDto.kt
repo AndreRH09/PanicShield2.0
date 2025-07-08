@@ -2,6 +2,7 @@ package com.example.panicshield.data.remote.dto
 
 import com.google.gson.annotations.SerializedName
 
+
 data class ContactDto(
     @SerializedName("id")
     val id: Long? = null,

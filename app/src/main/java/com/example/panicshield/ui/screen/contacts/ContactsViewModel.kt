@@ -22,6 +22,7 @@ class ContactsViewModel @Inject constructor(
 
     init {
         loadContacts()
+        observeNetworkState()
     }
 
     fun loadContacts() {
@@ -44,9 +45,26 @@ class ContactsViewModel @Inject constructor(
         }
     }
 
+    fun refreshContacts() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRefreshing = true)
+
+            contactUseCase.syncContacts()
+                .onSuccess {
+                    loadContacts()
+                }
+                .onFailure { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isRefreshing = false,
+                        errorMessage = "Error al sincronizar: ${error.message}"
+                    )
+                }
+        }
+    }
+
     fun loadPhoneContacts() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoadingPhoneContacts = true)
+            _uiState.value = _uiState.value.copy(isLoadingPhoneContacts = true, errorMessage = null)
 
             try {
                 val phoneContacts = contactUseCase.getPhoneContacts()
@@ -76,6 +94,7 @@ class ContactsViewModel @Inject constructor(
                         showAddDialog = false
                     )
                     clearDialogFields()
+                    showSuccessMessage("Contacto creado exitosamente")
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -102,6 +121,7 @@ class ContactsViewModel @Inject constructor(
                         editingContact = null
                     )
                     clearDialogFields()
+                    showSuccessMessage("Contacto actualizado exitosamente")
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -125,6 +145,7 @@ class ContactsViewModel @Inject constructor(
                         showDeleteDialog = false,
                         contactToDelete = null
                     )
+                    showSuccessMessage("Contacto eliminado exitosamente")
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
@@ -208,11 +229,54 @@ class ContactsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
 
+    fun clearSuccessMessage() {
+        _uiState.value = _uiState.value.copy(successMessage = null)
+    }
+
     private fun clearDialogFields() {
         _uiState.value = _uiState.value.copy(
             dialogName = "",
             dialogPhone = ""
         )
+    }
+
+    private fun showSuccessMessage(message: String) {
+        _uiState.value = _uiState.value.copy(successMessage = message)
+    }
+
+    private fun observeNetworkState() {
+        viewModelScope.launch {
+            contactUseCase.observeNetworkState().collect { isConnected ->
+                _uiState.value = _uiState.value.copy(isNetworkConnected = isConnected)
+            }
+        }
+    }
+
+    fun getSyncStats() {
+        viewModelScope.launch {
+            try {
+                val stats = contactUseCase.getSyncStats()
+                _uiState.value = _uiState.value.copy(syncStats = stats)
+            } catch (e: Exception) {
+                // Manejar error silenciosamente
+            }
+        }
+    }
+
+    fun validateContactData(name: String, phone: String): String? {
+        return when {
+            name.isBlank() -> "El nombre no puede estar vacío"
+            name.length < 2 -> "El nombre debe tener al menos 2 caracteres"
+            phone.isBlank() -> "El teléfono no puede estar vacío"
+            phone.length < 7 -> "El teléfono debe tener al menos 7 dígitos"
+            !phone.matches(Regex("^[+]?[0-9\\s\\-()]+$")) -> "El teléfono contiene caracteres inválidos"
+            else -> null
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Limpieza adicional si es necesaria
     }
 }
 
@@ -220,11 +284,14 @@ data class ContactsUiState(
     val contacts: List<Contact> = emptyList(),
     val phoneContacts: List<PhoneContact> = emptyList(),
     val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val isLoadingPhoneContacts: Boolean = false,
     val isCreating: Boolean = false,
     val isUpdating: Boolean = false,
     val isDeleting: Boolean = false,
+    val isNetworkConnected: Boolean = true,
     val errorMessage: String? = null,
+    val successMessage: String? = null,
     val showAddDialog: Boolean = false,
     val showEditDialog: Boolean = false,
     val showDeleteDialog: Boolean = false,
@@ -232,5 +299,6 @@ data class ContactsUiState(
     val editingContact: Contact? = null,
     val contactToDelete: Contact? = null,
     val dialogName: String = "",
-    val dialogPhone: String = ""
+    val dialogPhone: String = "",
+    val syncStats: Map<String, Int> = emptyMap()
 )

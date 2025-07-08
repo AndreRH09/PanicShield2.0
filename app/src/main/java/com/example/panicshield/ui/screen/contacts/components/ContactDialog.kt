@@ -16,6 +16,7 @@ fun ContactDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     isLoading: Boolean = false,
+    validationError: String? = null,
     modifier: Modifier = Modifier
 ) {
     AlertDialog(
@@ -42,6 +43,14 @@ fun ContactDialog(
                     enabled = !isLoading,
                     singleLine = true
                 )
+                if (!validationError.isNullOrBlank()) {
+                    Text(
+                        text = validationError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
             }
         },
         confirmButton = {
