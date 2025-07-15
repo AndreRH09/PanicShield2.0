@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.panicshield.data.local.database.AppDatabase
 import com.example.panicshield.data.local.dao.ContactDao
+import com.example.panicshield.data.local.dao.EmergencyHistoryDao
 import com.example.supabaseofflinesupport.SyncManager
 import dagger.Module
 import dagger.Provides
@@ -46,4 +47,12 @@ object DatabaseModule {
     ): SyncManager {
         return SyncManager(context, supabaseClient)
     }
+
+
+    @Provides
+    fun provideEmergencyHistoryDao(database: AppDatabase): EmergencyHistoryDao {
+        return database.emergencyHistoryDao()
+    }
+
+
 }
