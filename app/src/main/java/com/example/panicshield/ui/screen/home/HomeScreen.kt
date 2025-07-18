@@ -37,6 +37,7 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val locationInfo by viewModel.locationInfo.collectAsStateWithLifecycle()
+    val panicState by viewModel.panicState.collectAsStateWithLifecycle()
 
     val permissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     var requestedPermission by rememberSaveable { mutableStateOf(false) }
@@ -47,13 +48,14 @@ fun HomeScreen(
             permissionState.launchPermissionRequest()
             requestedPermission = true
         }
-        // viewModel.startConnectivityMonitoring()
     }
+
     LaunchedEffect(permissionState.status.isGranted) {
         if (permissionState.status.isGranted) {
-            viewModel.refreshLocation()  // Llama a tu función que actualiza la ubicación
+            viewModel.refreshLocation()
         }
     }
+
 
     Scaffold(
         topBar = {
@@ -78,7 +80,6 @@ fun HomeScreen(
                 }
             )
         },
-
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -89,7 +90,7 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ✅ INDICADOR DE CONEXIÓN CON SUSPEND
+            // ✅ INDICADOR DE CONEXIÓN
             ConnectionStatusIndicator(
                 connectionStatus = uiState.connectionStatus,
                 onRetry = { viewModel.retryConnection() }
@@ -97,12 +98,18 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // ✅ BOTÓN DE EMERGENCIA
+            // ✅ BOTÓN DE EMERGENCIA MODIFICADO
             EmergencyButton(
                 isActivated = uiState.isPanicActivated,
-                isLoading = uiState.isLoading,
+                isLoading = uiState.isLoading || panicState is HomeViewModel.PanicState.Sending,
                 emergencyStatus = uiState.emergencyStatus,
-                onClick = { viewModel.togglePanicButton() }
+                onClick = {
+                    if (uiState.isPanicActivated) {
+                        viewModel.togglePanicButton() // Desactivar
+                    } else {
+                        viewModel.activatePanicWithAlert() // Activar + enviar MQTT
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -122,6 +129,7 @@ fun HomeScreen(
             )
         }
     }
+
 
     // ✅ MANEJO DE ERRORES
     uiState.errorMessage?.let { errorMessage ->
@@ -364,10 +372,6 @@ fun LocationInfoCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-
-
-                Spacer(modifier = Modifier.height(8.dp))
-
                 LocationInfoRow(
                     icon = Icons.Default.Schedule,
                     label = "Actualizado:",
@@ -462,8 +466,6 @@ fun LocationInfoRow(
         )
     }
 }
-
-
 
 // ✅ FUNCIÓN HELPER PARA FORMATEAR TIMESTAMP
 private fun formatTimestamp(timestamp: Long): String {

@@ -1,11 +1,17 @@
 package com.example.panicshield.ui.screen.home
 
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.panicshield.data.local.TokenManager
+import com.example.panicshield.data.sms.UserHelper
+import com.example.panicshield.data.sms.SmsHelper
 import com.example.panicshield.data.remote.repository.EmergencyResult
+import com.example.panicshield.data.sms.PermissionManager
 import com.example.panicshield.domain.usecase.EmergencyUseCase
 import com.example.panicshield.domain.usecase.LocationUseCase
+import com.example.panicshield.domain.usecase.ContactUseCase
 import com.example.panicshield.domain.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -25,7 +31,9 @@ data class HomeUIState(
     val errorMessage: String? = null,
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val networkAvailable: Boolean = false,
-    val isLocationPermissionGranted: Boolean = false
+    val isLocationPermissionGranted: Boolean = false,
+    val smsStatus: String? = null,
+    val hasSmsPermission: Boolean = false
 )
 
 // Estados de conexión
@@ -40,7 +48,10 @@ enum class ConnectionStatus {
 class HomeViewModel @Inject constructor(
     private val emergencyUseCase: EmergencyUseCase,
     private val locationUseCase: LocationUseCase,
-    private val tokenManager: TokenManager
+    private val contactUseCase: ContactUseCase, // ✅ Cambio: usar ContactUseCase en lugar de ContactDao
+    private val tokenManager: TokenManager,
+    private val userHelper: UserHelper,
+    private val smsHelper: SmsHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUIState())
@@ -53,11 +64,322 @@ class HomeViewModel @Inject constructor(
     // Estados de autenticación
     private val _isAuthenticated = MutableStateFlow(false)
 
+    //MQTT
+    private val _panicState = MutableStateFlow<PanicState>(PanicState.Idle)
+    val panicState: StateFlow<PanicState> = _panicState
+    private val _permissionsGranted = MutableStateFlow(false)
+    val permissionsGranted = _permissionsGranted.asStateFlow()
+
+    fun updatePermissionStatus(context: Context) {
+        val permissionManager = PermissionManager(context)
+        _permissionsGranted.value = permissionManager.hasAllPermissions()
+    }
+
     init {
         observeAuthenticationState()
         observePanicState()
         observeLocationUpdates()
         initializeLocation()
+        initializeSms()
+
+        // ✅ AGREGAR ESTA LÍNEA:
+        startConnectivityMonitoring()
+    }
+
+
+    // ✅ FUNCIÓN: Inicializar SMS Manager
+    private fun initializeSms() {
+        viewModelScope.launch {
+            try {
+                Log.d("HomeViewModel", "🔄 Inicializando SMS Manager...")
+
+                // Verificar permisos SMS
+                val hasPermission = smsHelper.hasSmsPermission()
+                Log.d("HomeViewModel", "📱 Permisos SMS: $hasPermission")
+
+                _uiState.value = _uiState.value.copy(hasSmsPermission = hasPermission)
+
+                if (hasPermission) {
+                    val isConnected = smsHelper.connect()
+                    Log.d("HomeViewModel", "✅ SMS Manager listo: $isConnected")
+                } else {
+                    Log.w("HomeViewModel", "⚠️ Sin permisos SMS")
+                }
+
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "❌ Error inicializando SMS Manager: ${e.message}", e)
+            }
+        }
+    }
+
+    fun activatePanicWithAlert() {
+        viewModelScope.launch {
+            Log.d("HomeViewModel", "🚨 activatePanicWithAlert() llamada")
+
+            // ✅ Verificar contactos ANTES de continuar (para debugging)
+            checkContacts()
+
+            // Verificar autenticación
+            if (!_isAuthenticated.value) {
+                Log.e("HomeViewModel", "❌ No autenticado")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Debes iniciar sesión para activar emergencias"
+                )
+                return@launch
+            }
+
+            // Verificar ubicación ANTES que permisos SMS
+            val currentLocation = _locationInfo.value
+            if (currentLocation == null) {
+                Log.e("HomeViewModel", "❌ Sin ubicación")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "No se pudo obtener la ubicación. Intenta nuevamente."
+                )
+                return@launch
+            }
+
+            // ✅ Verificar que hay contactos ANTES de crear la emergencia
+            val contactsResult = contactUseCase.getContactsForEmergency()
+            if (contactsResult.isFailure) {
+                Log.w("HomeViewModel", "⚠️ ${contactsResult.exceptionOrNull()?.message}")
+                // Continuar con la emergencia pero mostrar advertencia
+            }
+
+            Log.d("HomeViewModel", "✅ Condiciones básicas verificadas, iniciando pánico...")
+
+            // Actualizar estado a loading
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                emergencyStatus = EmergencyStatus.PENDING,
+                errorMessage = null
+            )
+
+            _panicState.value = PanicState.Sending
+
+            try {
+                // CREAR EMERGENCIA PRIMERO (independiente de SMS)
+                val locationForEmergency = com.example.panicshield.domain.usecase.LocationInfo(
+                    latitude = currentLocation.latitude,
+                    longitude = currentLocation.longitude,
+                    address = currentLocation.address,
+                    accuracy = currentLocation.accuracy
+                )
+
+                Log.d("HomeViewModel", "📍 Creando emergencia con ubicación: ${currentLocation.latitude}, ${currentLocation.longitude}")
+
+                val result = emergencyUseCase.createPanicAlert(
+                    location = locationForEmergency,
+                    message = "Emergencia activada desde botón de pánico"
+                )
+
+                when (result) {
+                    is EmergencyResult.Success -> {
+                        Log.d("HomeViewModel", "✅ Emergencia creada exitosamente: ${result.data}")
+
+                        // Actualizar estado INMEDIATAMENTE
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            isPanicActivated = true,
+                            emergencyId = result.data.id?.toString(),
+                            emergencyStatus = EmergencyStatus.ACTIVE,
+                            lastPanicTime = System.currentTimeMillis(),
+                            connectionStatus = ConnectionStatus.CONNECTED
+                        )
+
+                        // ENVIAR SMS A TODOS LOS CONTACTOS
+                        if (_permissionsGranted.value) {
+                            Log.d("HomeViewModel", "📱 Enviando SMS a todos los contactos...")
+                            sendSmsAlerts(currentLocation)
+                        } else {
+                            Log.w("HomeViewModel", "⚠️ Sin permisos SMS, emergencia creada pero sin notificaciones SMS")
+                            _uiState.value = _uiState.value.copy(
+                                errorMessage = "Emergencia activada. SMS no enviado: permisos requeridos"
+                            )
+                        }
+
+                        _panicState.value = PanicState.Success
+                    }
+                    is EmergencyResult.Error -> {
+                        Log.e("HomeViewModel", "❌ Error creando emergencia: ${result.exception.message}")
+
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            emergencyStatus = EmergencyStatus.INACTIVE,
+                            errorMessage = "Error al crear emergencia: ${result.exception.message}",
+                            connectionStatus = ConnectionStatus.ERROR
+                        )
+                        _panicState.value = PanicState.Error(result.exception.message ?: "Error desconocido")
+                    }
+                    is EmergencyResult.Loading -> {
+                        Log.d("HomeViewModel", "⏳ Emergencia en proceso...")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "❌ Error general: ${e.message}", e)
+
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    emergencyStatus = EmergencyStatus.INACTIVE,
+                    errorMessage = "Error: ${e.message}"
+                )
+                _panicState.value = PanicState.Error(e.message ?: "Error enviando alerta")
+            }
+        }
+    }
+
+    // ✅ FUNCIÓN: Enviar SMS usando ContactUseCase
+    private suspend fun sendSmsAlerts(currentLocation: LocationInfo) {
+        try {
+            Log.d("HomeViewModel", "📱 Iniciando envío de SMS a contactos...")
+
+            // ✅ Verificar permiso SMS antes de continuar
+            if (!_permissionsGranted.value) {
+                Log.e("HomeViewModel", "❌ Permiso SMS no concedido")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Permiso para enviar SMS no concedido"
+                )
+                return
+            }
+
+            // ✅ Verificar conexión del SMS Manager
+            if (!smsHelper.isConnected()) {
+                Log.w("HomeViewModel", "⚠️ SMS Manager no conectado, intentando reconectar...")
+                val connected = smsHelper.connect()
+                if (!connected) {
+                    Log.e("HomeViewModel", "❌ No se pudo conectar al SMS Manager")
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "No se pudo conectar al SMS Manager"
+                    )
+                    return
+                }
+                Log.d("HomeViewModel", "✅ SMS Manager reconectado exitosamente")
+            }
+
+            // ✅ Obtener contactos específicamente para emergencia
+            val contactsResult = contactUseCase.getContactsForEmergency()
+
+            if (contactsResult.isSuccess) {
+                val contacts = contactsResult.getOrNull()
+                if (contacts.isNullOrEmpty()) {
+                    Log.w("HomeViewModel", "⚠️ No hay contactos válidos para SMS")
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Emergencia activada. No hay contactos válidos para notificar."
+                    )
+                    return
+                }
+
+                Log.d("HomeViewModel", "📋 Contactos válidos encontrados: ${contacts.size}")
+
+                // ✅ Crear la alerta de pánico
+                val panicAlert = PanicAlert(
+                    userPhone = userHelper.getUserPhone(),
+                    userName = userHelper.getUserName(),
+                    userId = userHelper.getUserId() ?: "ID desconocido",
+                    latitude = currentLocation.latitude,
+                    longitude = currentLocation.longitude,
+                    address = currentLocation.address ?: "Ubicación no disponible",
+                    priority = "HIGH",
+                    emergencyType = "PANIC",
+                    message = "¡ALERTA DE PÁNICO! ${userHelper.getUserName()} necesita ayuda urgente",
+                    timestamp = System.currentTimeMillis()
+                )
+
+                var successCount = 0
+                var failureCount = 0
+                val errors = mutableListOf<String>()
+                val successContacts = mutableListOf<String>()
+
+                // ✅ Enviar SMS a cada contacto
+                contacts.forEach { contact ->
+                    try {
+                        Log.d("HomeViewModel", "📱 Enviando SMS a: ${contact.name} (${contact.phone})")
+
+                        val smsResult = smsHelper.publishPanicAlert(
+                            contactPhone = contact.phone,
+                            panicData = panicAlert
+                        )
+
+                        if (smsResult) {
+                            successCount++
+                            successContacts.add(contact.name)
+                            Log.i("HomeViewModel", "✅ SMS enviado exitosamente a ${contact.name}")
+                        } else {
+                            failureCount++
+                            errors.add("Error enviando SMS a ${contact.name}")
+                            Log.e("HomeViewModel", "❌ Fallo al enviar SMS a ${contact.name}")
+                        }
+
+                    } catch (e: Exception) {
+                        failureCount++
+                        errors.add("Error con ${contact.name}: ${e.message}")
+                        Log.e("HomeViewModel", "❌ Excepción enviando SMS a ${contact.name}: ${e.message}", e)
+                    }
+                }
+
+                // ✅ Generar mensaje de estado detallado
+                val statusMessage = when {
+                    successCount > 0 && failureCount == 0 -> {
+                        "✅ SMS enviados exitosamente a todos los contactos ($successCount)"
+                    }
+                    successCount > 0 && failureCount > 0 -> {
+                        "⚠️ SMS enviados a $successCount contactos. $failureCount fallaron"
+                    }
+                    failureCount > 0 -> {
+                        "❌ Error enviando SMS a todos los contactos"
+                    }
+                    else -> "📱 No se enviaron SMS"
+                }
+
+                Log.i("HomeViewModel", "📊 Resultado SMS: $successCount exitosos, $failureCount fallidos")
+                Log.d("HomeViewModel", "✅ Contactos exitosos: ${successContacts.joinToString(", ")}")
+
+                // ✅ Actualizar estado con resultado
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = if (errors.isNotEmpty() && successCount == 0) statusMessage else null,
+                    smsStatus = statusMessage
+                )
+
+                // ✅ Log adicional para debugging
+                if (errors.isNotEmpty()) {
+                    Log.w("HomeViewModel", "⚠️ Errores durante envío de SMS:")
+                    errors.forEach { error ->
+                        Log.w("HomeViewModel", "   - $error")
+                    }
+                }
+
+            } else {
+                val errorMessage = contactsResult.exceptionOrNull()?.message ?: "Error desconocido"
+                Log.e("HomeViewModel", "❌ Error obteniendo contactos: $errorMessage")
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Error obteniendo contactos: $errorMessage"
+                )
+            }
+
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "❌ Error general enviando SMS: ${e.message}", e)
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Error enviando SMS: ${e.message}"
+            )
+        }
+    }
+    private suspend fun checkContacts() {
+        try {
+            val contactsResult = contactUseCase.getContacts()
+            if (contactsResult.isSuccess) {
+                val contacts = contactsResult.getOrNull() ?: emptyList()
+                Log.d("HomeViewModel", "🔍 Verificación de contactos:")
+                Log.d("HomeViewModel", "   📊 Total contactos: ${contacts.size}")
+                Log.d("HomeViewModel", "   👤 Usuario actual: ${userHelper.getUserId()}")
+
+                contacts.forEach { contact ->
+                    Log.d("HomeViewModel", "   📱 ${contact.name}: ${contact.phone} (User: ${contact.userId})")
+                }
+            } else {
+                Log.e("HomeViewModel", "❌ Error verificando contactos: ${contactsResult.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "❌ Excepción verificando contactos: ${e.message}", e)
+        }
     }
 
     private fun observeAuthenticationState() {
@@ -313,7 +635,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    // ✅ NUEVA FUNCIÓN: Monitoreo de conectividad con suspend
+    // ✅ FUNCIÓN: Monitoreo de conectividad con suspend
     fun startConnectivityMonitoring() {
         // Cancelar job anterior si existe
         _connectivityJob.value?.cancel()
@@ -327,7 +649,7 @@ class HomeViewModel @Inject constructor(
         _connectivityJob.value = job
     }
 
-    // ✅ NUEVA FUNCIÓN: Verificar conectividad de red
+    // ✅ FUNCIÓN: Verificar conectividad de red
     private suspend fun checkNetworkConnectivity() {
         _uiState.value = _uiState.value.copy(
             connectionStatus = ConnectionStatus.CONNECTING
@@ -390,14 +712,14 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    // ✅ FUNCIÓN EXISTENTE MEJORADA: retryConnection
+    // ✅ FUNCIÓN: retryConnection
     fun retryConnection() {
         viewModelScope.launch {
             checkNetworkConnectivity()
         }
     }
 
-    // ✅ NUEVA FUNCIÓN: Detener monitoreo
+    // ✅ FUNCIÓN: Detener monitoreo
     fun stopConnectivityMonitoring() {
         _connectivityJob.value?.cancel()
         _connectivityJob.value = null
@@ -408,4 +730,14 @@ class HomeViewModel @Inject constructor(
         super.onCleared()
         stopConnectivityMonitoring()
     }
+
+    // Estados MQTT
+    sealed class PanicState {
+        object Idle : PanicState()
+        object Sending : PanicState()
+        object Success : PanicState()
+        data class Error(val message: String) : PanicState()
+    }
+
+
 }
