@@ -7,3 +7,9 @@ Para evitar errores en la compilacion, se necesita actualizar  (dentro del archi
 
 ## Version de gradle 
 8.11.1
+
+## Integrantes:
+- Vilca Quispe, Franks
+- Titto Campos, Rutbel
+- Añazco Huamanquispe, André
+- Garay Bedregal, César
