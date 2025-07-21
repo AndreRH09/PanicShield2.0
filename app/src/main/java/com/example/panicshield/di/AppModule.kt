@@ -1,6 +1,7 @@
 package com.example.panicshield.di
 
 import android.content.Context
+import com.example.panicshield.data.local.SettingsDataStore
 import com.example.panicshield.data.local.TokenManager
 import com.example.panicshield.data.sms.SmsHelper
 import com.example.panicshield.data.sms.UserHelper
@@ -43,4 +44,12 @@ object AppModule {
         return UserHelper(context, supabaseClient)
     }
 
+    // Settings
+    @Provides
+    @Singleton
+    fun provideSettingsDataStore(
+        @ApplicationContext context: Context
+    ): SettingsDataStore {
+        return SettingsDataStore(context)
+    }
 }

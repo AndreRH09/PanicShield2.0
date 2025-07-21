@@ -10,7 +10,10 @@ activityCompose = "1.10.1"
 composeBom = "2024.04.01"
 androidx-navigation = "2.7.7"
 mediationTestSuite = "3.0.0"
-media3CommonKtx = "1.7.1" # Keep navigation version consistent
+media3CommonKtx = "1.7.1"
+foundationAndroid = "1.6.6"
+navigationComposeJvmstubs = "2.9.2"
+preferenceKtx = "1.2.1" # Keep navigation version consistent
 
 
 [libraries]
@@ -31,6 +34,9 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 mediation-test-suite = { group = "com.google.android.ads", name = "mediation-test-suite", version.ref = "mediationTestSuite" }
 androidx-media3-common-ktx = { group = "androidx.media3", name = "media3-common-ktx", version.ref = "media3CommonKtx" }
+androidx-foundation-android = { group = "androidx.compose.foundation", name = "foundation-android", version.ref = "foundationAndroid" }
+androidx-navigation-compose-jvmstubs = { group = "androidx.navigation", name = "navigation-compose-jvmstubs", version.ref = "navigationComposeJvmstubs" }
+androidx-preference-ktx = { group = "androidx.preference", name = "preference-ktx", version.ref = "preferenceKtx" }
 
 
 [plugins]

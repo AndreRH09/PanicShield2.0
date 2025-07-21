@@ -78,6 +78,11 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.mediation.test.suite)
     implementation(libs.androidx.media3.common.ktx)
+    implementation(libs.androidx.foundation.android)
+    implementation(libs.androidx.foundation.android)
+    implementation(libs.androidx.preference.ktx)
+    implementation(libs.androidx.foundation.android)
+    implementation(libs.androidx.foundation.android)
 
     // Testing
     testImplementation(libs.junit)
