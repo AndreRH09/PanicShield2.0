@@ -26,4 +26,7 @@ interface EmergencyHistoryDao {
 
     @Query("SELECT MAX(lastSyncedAt) FROM emergency_history_cache")
     suspend fun getLastSyncTimestamp(): Long?
+
+    @Query("SELECT * FROM emergency_history_cache ORDER BY createdAt DESC")
+    suspend fun getAllEmergencies(): List<EmergencyHistoryCacheEntity>
 }
