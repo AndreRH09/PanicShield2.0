@@ -17,7 +17,8 @@ class EmergencyUseCase @Inject constructor(
 
     suspend fun createPanicAlert(
         location: LocationInfo,
-        message: String? = null
+        message: String? = null,
+        priority: String = "HIGH"
     ): EmergencyResult<Emergency> {
         return try {
             val deviceInfo = createDeviceInfoMap()
@@ -29,7 +30,7 @@ class EmergencyUseCase @Inject constructor(
                 longitude = location.longitude,
                 address = location.address,
                 message = message ?: "Emergencia activada desde botón de pánico",
-                priority = "HIGH",
+                priority = priority,
                 deviceInfo = deviceInfo
             )
 
@@ -81,95 +82,6 @@ class EmergencyUseCase @Inject constructor(
         }
     }
 
-    // Versiones con tipos enumerados (nuevas, más seguras)
-    suspend fun createEmergency(
-        emergencyType: EmergencyType,
-        location: EmergencyLocation,
-        message: String? = null,
-        priority: EmergencyPriority = EmergencyPriority.HIGH
-    ): EmergencyResult<Emergency> {
-        return try {
-            val deviceInfo = DeviceInfo(
-                model = android.os.Build.MODEL,
-                androidVersion = android.os.Build.VERSION.RELEASE,
-                appVersion = "1.0",
-                timestamp = System.currentTimeMillis()
-            )
-
-            val result = emergencyRepository.createEmergency(
-                emergencyType = emergencyType,
-                status = EmergencyStatus.PENDING,
-                location = location,
-                message = message,
-                priority = priority,
-                deviceInfo = deviceInfo
-            )
-
-            result.toEmergencyResult()
-        } catch (e: Exception) {
-            EmergencyResult.Error(e)
-        }
-    }
-
-    suspend fun updateEmergency(
-        emergencyId: Long,
-        emergencyType: EmergencyType? = null,
-        status: EmergencyStatus? = null,
-        location: EmergencyLocation? = null,
-        message: String? = null,
-        priority: EmergencyPriority? = null
-    ): EmergencyResult<Emergency> {
-        return try {
-            val result = emergencyRepository.updateEmergency(
-                id = emergencyId,
-                emergencyType = emergencyType,
-                status = status,
-                location = location,
-                message = message,
-                priority = priority
-            )
-
-            result.toEmergencyResult()
-        } catch (e: Exception) {
-            EmergencyResult.Error(e)
-        }
-    }
-
-    suspend fun getEmergencies(): EmergencyResult<List<Emergency>> {
-        return try {
-            val result = emergencyRepository.getUserEmergencies()
-            result.toEmergencyResult()
-        } catch (e: Exception) {
-            EmergencyResult.Error(e)
-        }
-    }
-
-    suspend fun getAllEmergencies(): EmergencyResult<List<Emergency>> {
-        return try {
-            val result = emergencyRepository.getAllEmergencies()
-            result.toEmergencyResult()
-        } catch (e: Exception) {
-            EmergencyResult.Error(e)
-        }
-    }
-
-    suspend fun getEmergenciesByStatus(status: EmergencyStatus): EmergencyResult<List<Emergency>> {
-        return try {
-            val result = emergencyRepository.getEmergenciesByStatus(status)
-            result.toEmergencyResult()
-        } catch (e: Exception) {
-            EmergencyResult.Error(e)
-        }
-    }
-
-    suspend fun getEmergencyHistory(): EmergencyResult<List<Emergency>> {
-        return try {
-            val result = emergencyRepository.getEmergencyHistory()
-            result.toEmergencyResult()
-        } catch (e: Exception) {
-            EmergencyResult.Error(e)
-        }
-    }
 
     // ===== FUNCIONES DE FLOW =====
 

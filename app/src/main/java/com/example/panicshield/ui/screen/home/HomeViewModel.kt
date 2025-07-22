@@ -1,5 +1,7 @@
 package com.example.panicshield.ui.screen.home
 
+import com.example.panicshield.data.local.SettingsDataStore
+import kotlinx.coroutines.flow.combine
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -36,6 +38,18 @@ data class HomeUIState(
     val hasSmsPermission: Boolean = false
 )
 
+data class TapState(
+    val tapCount: Int = 0,
+    val isInTapWindow: Boolean = false,
+    val windowStartTime: Long = 0L
+)
+
+data class AlertSettings(
+    val moderateAlertTaps: Int = 2,
+    val severeAlertTaps: Int = 3,
+    val tapWindowDuration: Long = 2000L // 2 segundos
+)
+
 // Estados de conexión
 enum class ConnectionStatus {
     CONNECTED,
@@ -51,7 +65,9 @@ class HomeViewModel @Inject constructor(
     private val contactUseCase: ContactUseCase, // ✅ Cambio: usar ContactUseCase en lugar de ContactDao
     private val tokenManager: TokenManager,
     private val userHelper: UserHelper,
-    private val smsHelper: SmsHelper
+    private val smsHelper: SmsHelper,
+    private val settingsDataStore: SettingsDataStore // ✅ AGREGAR ESTA LÍNEA
+
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUIState())
@@ -63,6 +79,10 @@ class HomeViewModel @Inject constructor(
 
     // Estados de autenticación
     private val _isAuthenticated = MutableStateFlow(false)
+    // Estados para lógica de toques rápidos
+    private val _tapState = MutableStateFlow(TapState())
+    private val _alertSettings = MutableStateFlow(AlertSettings())
+
 
     //MQTT
     private val _panicState = MutableStateFlow<PanicState>(PanicState.Idle)
@@ -84,6 +104,26 @@ class HomeViewModel @Inject constructor(
 
         // ✅ AGREGAR ESTA LÍNEA:
         startConnectivityMonitoring()
+        observeUserSettings() // ✅ AGREGAR ESTA LÍNEA
+
+    }
+
+    private fun observeUserSettings() {
+        viewModelScope.launch {
+            combine(
+                settingsDataStore.moderateAlertTaps,
+                settingsDataStore.severeAlertTaps
+            ) { moderate, severe ->
+                AlertSettings(
+                    moderateAlertTaps = moderate,
+                    severeAlertTaps = severe,
+                    tapWindowDuration = 2000L
+                )
+            }.collect { settings ->
+                _alertSettings.value = settings
+                Log.d("HomeViewModel", "⚙️ Settings actualizados: Moderado=${settings.moderateAlertTaps}, Severo=${settings.severeAlertTaps}")
+            }
+        }
     }
 
 
@@ -112,14 +152,75 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun activatePanicWithAlert() {
+    // NUEVA FUNCIÓN: Manejar toques del botón de emergencia
+    fun handleEmergencyButtonTap() {
+        val currentTime = System.currentTimeMillis()
+        val currentTapState = _tapState.value
+        val settings = _alertSettings.value
+
+        when {
+            !currentTapState.isInTapWindow -> {
+                // Primer toque - iniciar ventana de tiempo
+                Log.d("HomeViewModel", "👆 Primer toque - iniciando ventana de ${settings.tapWindowDuration}ms")
+                _tapState.value = TapState(
+                    tapCount = 1,
+                    isInTapWindow = true,
+                    windowStartTime = currentTime
+                )
+
+                // Iniciar timer para evaluar al final de la ventana
+                startTapWindowTimer(settings)
+            }
+
+            currentTapState.isInTapWindow -> {
+                // Toque adicional dentro de la ventana
+                val newTapCount = currentTapState.tapCount + 1
+                Log.d("HomeViewModel", "👆 Toque #$newTapCount dentro de la ventana")
+
+                _tapState.value = currentTapState.copy(tapCount = newTapCount)
+            }
+        }
+    }
+
+    private fun startTapWindowTimer(settings: AlertSettings) {
         viewModelScope.launch {
-            Log.d("HomeViewModel", "🚨 activatePanicWithAlert() llamada")
+            delay(settings.tapWindowDuration)
 
-            // ✅ Verificar contactos ANTES de continuar (para debugging)
-            checkContacts()
+            val finalTapState = _tapState.value
+            if (finalTapState.isInTapWindow) {
+                Log.d("HomeViewModel", "⏰ Ventana cerrada con ${finalTapState.tapCount} toques")
+                evaluateTapsAndCreateEmergency(finalTapState.tapCount, settings)
+                resetTapState()
+            }
+        }
+    }
 
-            // Verificar autenticación
+    private fun evaluateTapsAndCreateEmergency(tapCount: Int, settings: AlertSettings) {
+        Log.d("HomeViewModel", "🎯 Evaluando $tapCount toques (Moderado: ${settings.moderateAlertTaps}, Severo: ${settings.severeAlertTaps})")
+
+        val priority = when {
+            tapCount >= settings.severeAlertTaps -> {
+                Log.d("HomeViewModel", "🚨 ALERTA SEVERA activada con $tapCount toques")
+                "CRITICAL"
+            }
+            tapCount >= settings.moderateAlertTaps -> {
+                Log.d("HomeViewModel", "⚠️ ALERTA MODERADA activada con $tapCount toques")
+                "HIGH"
+            }
+            else -> {
+                Log.d("HomeViewModel", "📱 Insuficientes toques ($tapCount), creando emergencia normal")
+                "HIGH" // Por defecto
+            }
+        }
+
+        activateEmergencyWithPriority(priority)
+    }
+
+    private fun activateEmergencyWithPriority(priority: String) {
+        viewModelScope.launch {
+            Log.d("HomeViewModel", "🚨 Activando emergencia con prioridad: $priority")
+
+            // Verificar condiciones básicas
             if (!_isAuthenticated.value) {
                 Log.e("HomeViewModel", "❌ No autenticado")
                 _uiState.value = _uiState.value.copy(
@@ -128,7 +229,6 @@ class HomeViewModel @Inject constructor(
                 return@launch
             }
 
-            // Verificar ubicación ANTES que permisos SMS
             val currentLocation = _locationInfo.value
             if (currentLocation == null) {
                 Log.e("HomeViewModel", "❌ Sin ubicación")
@@ -138,14 +238,11 @@ class HomeViewModel @Inject constructor(
                 return@launch
             }
 
-            // ✅ Verificar que hay contactos ANTES de crear la emergencia
+            // Verificar contactos
             val contactsResult = contactUseCase.getContactsForEmergency()
             if (contactsResult.isFailure) {
                 Log.w("HomeViewModel", "⚠️ ${contactsResult.exceptionOrNull()?.message}")
-                // Continuar con la emergencia pero mostrar advertencia
             }
-
-            Log.d("HomeViewModel", "✅ Condiciones básicas verificadas, iniciando pánico...")
 
             // Actualizar estado a loading
             _uiState.value = _uiState.value.copy(
@@ -157,7 +254,6 @@ class HomeViewModel @Inject constructor(
             _panicState.value = PanicState.Sending
 
             try {
-                // CREAR EMERGENCIA PRIMERO (independiente de SMS)
                 val locationForEmergency = com.example.panicshield.domain.usecase.LocationInfo(
                     latitude = currentLocation.latitude,
                     longitude = currentLocation.longitude,
@@ -165,18 +261,23 @@ class HomeViewModel @Inject constructor(
                     accuracy = currentLocation.accuracy
                 )
 
-                Log.d("HomeViewModel", "📍 Creando emergencia con ubicación: ${currentLocation.latitude}, ${currentLocation.longitude}")
+                val message = when (priority) {
+                    "CRITICAL" -> "🚨 EMERGENCIA CRÍTICA - Múltiples toques rápidos detectados"
+                    "HIGH" -> "⚠️ EMERGENCIA MODERADA - Toques rápidos detectados"
+                    else -> "Emergencia activada desde botón de pánico"
+                }
 
+                // Crear emergencia con prioridad específica
                 val result = emergencyUseCase.createPanicAlert(
                     location = locationForEmergency,
-                    message = "Emergencia activada desde botón de pánico"
+                    message = message,
+                    priority = priority
                 )
 
                 when (result) {
                     is EmergencyResult.Success -> {
-                        Log.d("HomeViewModel", "✅ Emergencia creada exitosamente: ${result.data}")
+                        Log.d("HomeViewModel", "✅ Emergencia $priority creada exitosamente")
 
-                        // Actualizar estado INMEDIATAMENTE
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             isPanicActivated = true,
@@ -186,12 +287,11 @@ class HomeViewModel @Inject constructor(
                             connectionStatus = ConnectionStatus.CONNECTED
                         )
 
-                        // ENVIAR SMS A TODOS LOS CONTACTOS
+                        // Enviar SMS con prioridad específica
                         if (_permissionsGranted.value) {
-                            Log.d("HomeViewModel", "📱 Enviando SMS a todos los contactos...")
-                            sendSmsAlerts(currentLocation)
+                            sendSmsAlertsWithPriority(currentLocation, priority)
                         } else {
-                            Log.w("HomeViewModel", "⚠️ Sin permisos SMS, emergencia creada pero sin notificaciones SMS")
+                            Log.w("HomeViewModel", "⚠️ Sin permisos SMS")
                             _uiState.value = _uiState.value.copy(
                                 errorMessage = "Emergencia activada. SMS no enviado: permisos requeridos"
                             )
@@ -201,7 +301,6 @@ class HomeViewModel @Inject constructor(
                     }
                     is EmergencyResult.Error -> {
                         Log.e("HomeViewModel", "❌ Error creando emergencia: ${result.exception.message}")
-
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             emergencyStatus = EmergencyStatus.INACTIVE,
@@ -216,7 +315,6 @@ class HomeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "❌ Error general: ${e.message}", e)
-
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     emergencyStatus = EmergencyStatus.INACTIVE,
@@ -225,6 +323,97 @@ class HomeViewModel @Inject constructor(
                 _panicState.value = PanicState.Error(e.message ?: "Error enviando alerta")
             }
         }
+    }
+
+    private suspend fun sendSmsAlertsWithPriority(currentLocation: LocationInfo, priority: String) {
+        try {
+            Log.d("HomeViewModel", "📱 Enviando SMS con prioridad: $priority")
+
+            // Verificaciones básicas
+            if (!_permissionsGranted.value) {
+                Log.e("HomeViewModel", "❌ Permiso SMS no concedido")
+                return
+            }
+
+            if (!smsHelper.isConnected()) {
+                val connected = smsHelper.connect()
+                if (!connected) {
+                    Log.e("HomeViewModel", "❌ No se pudo conectar al SMS Manager")
+                    return
+                }
+            }
+
+            val contactsResult = contactUseCase.getContactsForEmergency()
+
+            if (contactsResult.isSuccess) {
+                val contacts = contactsResult.getOrNull()
+                if (contacts.isNullOrEmpty()) {
+                    return
+                }
+
+                val priorityText = when (priority) {
+                    "CRITICAL" -> "🚨 CRÍTICA"
+                    "HIGH" -> "⚠️ MODERADA"
+                    else -> "NORMAL"
+                }
+
+                val panicAlert = PanicAlert(
+                    userPhone = userHelper.getUserPhone(),
+                    userName = userHelper.getUserName(),
+                    userId = userHelper.getUserId() ?: "ID desconocido",
+                    latitude = currentLocation.latitude,
+                    longitude = currentLocation.longitude,
+                    address = currentLocation.address ?: "Ubicación no disponible",
+                    priority = priority,
+                    emergencyType = "PANIC",
+                    message = "🚨 ALERTA DE PÁNICO $priorityText - ${userHelper.getUserName()} necesita ayuda urgente",
+                    timestamp = System.currentTimeMillis()
+                )
+
+                var successCount = 0
+                var failureCount = 0
+
+                contacts.forEach { contact ->
+                    try {
+                        val smsResult = smsHelper.publishPanicAlert(contact.phone, panicAlert)
+                        if (smsResult) {
+                            successCount++
+                            Log.i("HomeViewModel", "✅ SMS enviado a ${contact.name}")
+                        } else {
+                            failureCount++
+                            Log.e("HomeViewModel", "❌ Fallo SMS a ${contact.name}")
+                        }
+                    } catch (e: Exception) {
+                        failureCount++
+                        Log.e("HomeViewModel", "❌ Error SMS a ${contact.name}: ${e.message}")
+                    }
+                }
+
+                val statusMessage = when {
+                    successCount > 0 && failureCount == 0 ->
+                        "✅ SMS enviados exitosamente ($successCount)"
+                    successCount > 0 && failureCount > 0 ->
+                        "⚠️ SMS enviados a $successCount contactos. $failureCount fallaron"
+                    else -> "❌ Error enviando SMS a todos los contactos"
+                }
+
+                _uiState.value = _uiState.value.copy(smsStatus = statusMessage)
+
+            } else {
+                Log.e("HomeViewModel", "❌ Error obteniendo contactos")
+            }
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "❌ Error general enviando SMS: ${e.message}", e)
+        }
+    }
+
+    private fun resetTapState() {
+        _tapState.value = TapState()
+        Log.d("HomeViewModel", "🔄 Estado de toques reiniciado")
+    }
+
+    fun activatePanicWithAlert() {
+        handleEmergencyButtonTap()
     }
 
     // ✅ FUNCIÓN: Enviar SMS usando ContactUseCase

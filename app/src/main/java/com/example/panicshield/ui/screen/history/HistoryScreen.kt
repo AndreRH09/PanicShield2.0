@@ -61,6 +61,20 @@ fun HistoryScreen(
         }
     }
 }
+@Composable
+fun getDetailCardColor(status: EmergencyStatus, priority: String?): Color {
+    return when {
+        status == EmergencyStatus.CANCELLED -> Color(0xFF757575)    // ✅ CANCELLED = GRIS SIEMPRE
+        !priority.isNullOrBlank() -> getPriorityColor(priority)      // ✅ LUEGO PRIORIDAD
+        else -> when (status) {                                      // ✅ FINALMENTE ESTADO
+            EmergencyStatus.ACTIVE -> Color(0xFFE53935)
+            EmergencyStatus.COMPLETED -> Color(0xFF4CAF50)
+            EmergencyStatus.PENDING -> Color(0xFFFF9800)
+            EmergencyStatus.CANCELLING -> Color(0xFF9C27B0)
+            else -> Color(0xFF757575)
+        }
+    }
+}
 
 @Composable
 fun HistoryListView(
@@ -130,7 +144,7 @@ fun HistoryListView(
                     .fillMaxWidth()
                     .padding(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = colors.errorContainer
+                    containerColor = colors.errorContainer // ✅ USAR COLOR DE ERROR NORMAL
                 )
             ) {
                 Row(
@@ -153,6 +167,7 @@ fun HistoryListView(
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -192,6 +207,15 @@ fun SearchBar(
         ),
         singleLine = true
     )
+}
+// 1. FUNCIÓN NUEVA: Obtener color según prioridad
+@Composable
+fun getPriorityColor(priority: String?): Color {
+    return when (priority?.uppercase()) {
+        "CRITICAL" -> Color(0xFFE53935) // Rojo para crítica
+        "HIGH" -> Color(0xFFFFC107)     // Amarillo para moderada/alta
+        else -> Color(0xFF9E9E9E)       // Gris para otros casos
+    }
 }
 
 @Composable
@@ -302,6 +326,7 @@ fun EmergencyHistoryItem(
             // ✅ ICONO DE ESTADO
             EmergencyStatusIcon(
                 status = emergency.status,
+                priority = emergency.priority,
                 modifier = Modifier.size(40.dp)
             )
 
@@ -321,9 +346,10 @@ fun EmergencyHistoryItem(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = emergency.emergencyType.replace("_", " ").uppercase(),
+                    text = "ALARMA ${getPriorityDisplayText(emergency.priority)}",
                     fontSize = 12.sp,
-                    color = colorScheme.onSurfaceVariant
+                    color = getPriorityColor(emergency.priority),
+                    fontWeight = FontWeight.Bold
                 )
 
                 Text(
@@ -353,20 +379,44 @@ fun EmergencyHistoryItem(
         }
     }
 }
+
+fun getPriorityDisplayText(priority: String?): String {
+    return when (priority?.uppercase()) {
+        "CRITICAL" -> "CRÍTICA"
+        "HIGH" -> "MODERADA"
+        "MEDIUM" -> "MEDIA"
+        "LOW" -> "BAJA"
+        else -> "NORMAL"
+    }
+}
 @Composable
 fun EmergencyStatusIcon(
+    modifier: Modifier = Modifier,
     status: EmergencyStatus,
-    modifier: Modifier = Modifier
+    priority: String? = null // ✅ NUEVO PARÁMETRO
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
-    val (icon, color) = when (status) {
-        EmergencyStatus.ACTIVE -> Icons.Default.Warning to colorScheme.error
-        EmergencyStatus.COMPLETED -> Icons.Default.CheckCircle to colorScheme.primary
-        EmergencyStatus.CANCELLED -> Icons.Default.Cancel to colorScheme.outline
-        EmergencyStatus.PENDING -> Icons.Default.Schedule to colorScheme.tertiary
-        EmergencyStatus.CANCELLING -> Icons.Default.HourglassEmpty to colorScheme.secondary
-        else -> Icons.Default.Info to colorScheme.inversePrimary
+    // ✅ JERARQUÍA: CANCELLED SIEMPRE GRIS, LUEGO PRIORIDAD
+    val color = when {
+        status == EmergencyStatus.CANCELLED -> colorScheme.outline // ✅ CANCELLED = GRIS SIEMPRE
+        !priority.isNullOrBlank() -> getPriorityColor(priority)     // ✅ LUEGO PRIORIDAD
+        else -> when (status) {                                     // ✅ FINALMENTE ESTADO
+            EmergencyStatus.ACTIVE -> colorScheme.error
+            EmergencyStatus.COMPLETED -> colorScheme.primary
+            EmergencyStatus.PENDING -> colorScheme.tertiary
+            EmergencyStatus.CANCELLING -> colorScheme.secondary
+            else -> colorScheme.inversePrimary
+        }
+    }
+
+    val icon = when (status) {
+        EmergencyStatus.ACTIVE -> Icons.Default.Warning
+        EmergencyStatus.COMPLETED -> Icons.Default.CheckCircle
+        EmergencyStatus.CANCELLED -> Icons.Default.Cancel
+        EmergencyStatus.PENDING -> Icons.Default.Schedule
+        EmergencyStatus.CANCELLING -> Icons.Default.HourglassEmpty
+        else -> Icons.Default.Info
     }
 
     Box(
@@ -385,6 +435,7 @@ fun EmergencyStatusIcon(
         )
     }
 }
+
 
 @Composable
 fun EmptyHistoryState(
@@ -485,12 +536,7 @@ fun EmergencyDetailsView(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = when (emergency.status) {
-                    EmergencyStatus.ACTIVE -> Color(0xFFE53935)
-                    EmergencyStatus.COMPLETED -> Color(0xFF4CAF50)
-                    EmergencyStatus.CANCELLED -> Color(0xFF757575)
-                    else -> Color(0xFFFF9800)
-                }
+                containerColor = getDetailCardColor(emergency.status, emergency.priority) // ✅ USAR JERARQUÍA CORRECTA
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -529,7 +575,7 @@ fun EmergencyDetailsView(
                 // ✅ INFORMACIÓN DE LA EMERGENCIA
                 EmergencyDetailRow(
                     label = "Tipo de alarma",
-                    value = emergency.emergencyType.replace("_", " ").uppercase()
+                    value = emergency.priority?.uppercase() ?: "NORMAL" // ✅ MOSTRAR PRIORIDAD
                 )
 
                 EmergencyDetailRow(
@@ -537,10 +583,6 @@ fun EmergencyDetailsView(
                     value = formatDetailTime(emergency.createdAt)
                 )
 
-                EmergencyDetailRow(
-                    label = "Ubicación",
-                    value = emergency.address ?: "Ubicación no disponible"
-                )
 
                 EmergencyDetailRow(
                     label = "Estado",
