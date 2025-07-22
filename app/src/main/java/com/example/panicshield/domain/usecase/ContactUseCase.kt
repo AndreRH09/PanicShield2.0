@@ -1,5 +1,7 @@
 package com.example.panicshield.domain.usecase
 
+import android.content.ContentValues.TAG
+import android.util.Log
 import com.example.panicshield.data.remote.repository.ContactRepository
 import com.example.panicshield.domain.model.Contact
 import com.example.panicshield.domain.model.PhoneContact
@@ -120,4 +122,54 @@ class ContactUseCase @Inject constructor(
         val phoneRegex = Regex("^[+]?[0-9\\s\\-()]{7,20}$")
         return phoneRegex.matches(phone)
     }
+
+    /**
+     * Obtiene contactos específicamente para envío de SMS de emergencia
+     */
+    suspend fun getContactsForEmergency(): Result<List<Contact>> {
+        return try {
+            val result = getContacts()
+
+            if (result.isSuccess) {
+                val contacts = result.getOrNull() ?: emptyList()
+
+                // Filtrar contactos válidos para SMS
+                val validContacts = contacts.filter { contact ->
+                    contact.phone.isNotBlank() &&
+                            contact.name.isNotBlank()
+                }
+
+                Log.d(TAG, "📱 Contactos válidos para SMS: ${validContacts.size} de ${contacts.size}")
+
+                if (validContacts.isEmpty()) {
+                    Log.w(TAG, "⚠️ No hay contactos válidos para envío de SMS")
+                    return Result.failure(Exception("No hay contactos válidos para envío de SMS"))
+                }
+
+                Result.success(validContacts)
+            } else {
+                result
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error obteniendo contactos para emergencia: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    /**
+     * Obtiene el conteo de contactos del usuario
+     */
+    suspend fun getContactCount(): Int {
+        return try {
+            val result = getContacts()
+            if (result.isSuccess) {
+                result.getOrNull()?.size ?: 0
+            } else {
+                0
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error obteniendo conteo de contactos: ${e.message}", e)
+            0
+        }
+    }
+
 }

@@ -17,59 +17,75 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 // Colores para el tema de la aplicación de pánico
-private val md_theme_light_primary = Color(0xFFD32F2F)
+private val md_theme_light_primary = Color(0xFFD50000)
 private val md_theme_light_onPrimary = Color(0xFFFFFFFF)
-private val md_theme_light_primaryContainer = Color(0xFFFFDAD6)
-private val md_theme_light_onPrimaryContainer = Color(0xFF410002)
-private val md_theme_light_secondary = Color(0xFF775652)
+private val md_theme_light_primaryContainer = Color(0xFFFFD6D6)
+private val md_theme_light_onPrimaryContainer = Color(0xFF4A0000)
+
+private val md_theme_light_secondary = Color(0xFF616161)
 private val md_theme_light_onSecondary = Color(0xFFFFFFFF)
-private val md_theme_light_secondaryContainer = Color(0xFFFFDAD6)
-private val md_theme_light_onSecondaryContainer = Color(0xFF2C1512)
-private val md_theme_light_tertiary = Color(0xFF755A2F)
-private val md_theme_light_onTertiary = Color(0xFFFFFFFF)
-private val md_theme_light_tertiaryContainer = Color(0xFFFFDDB3)
-private val md_theme_light_onTertiaryContainer = Color(0xFF271900)
-private val md_theme_light_error = Color(0xFFBA1A1A)
+private val md_theme_light_secondaryContainer = Color(0xFFE0E0E0)
+private val md_theme_light_onSecondaryContainer = Color(0xFF212121)
+
+private val md_theme_light_tertiary = Color(0xFFFFC107)
+private val md_theme_light_onTertiary = Color(0xFF000000)
+private val md_theme_light_tertiaryContainer = Color(0xFFFFECB3)
+private val md_theme_light_onTertiaryContainer = Color(0xFF3E2723)
+
+private val md_theme_light_error = Color(0xFFB00020)
 private val md_theme_light_errorContainer = Color(0xFFFFDAD6)
 private val md_theme_light_onError = Color(0xFFFFFFFF)
 private val md_theme_light_onErrorContainer = Color(0xFF410002)
-private val md_theme_light_background = Color(0xFFFFFBFF)
-private val md_theme_light_onBackground = Color(0xFF201A19)
-private val md_theme_light_surface = Color(0xFFFFFBFF)
-private val md_theme_light_onSurface = Color(0xFF201A19)
-private val md_theme_light_surfaceVariant = Color(0xFFF5DDDA)
-private val md_theme_light_onSurfaceVariant = Color(0xFF534341)
-private val md_theme_light_outline = Color(0xFF857371)
-private val md_theme_light_inverseOnSurface = Color(0xFFFBEEEC)
-private val md_theme_light_inverseSurface = Color(0xFF362F2E)
-private val md_theme_light_inversePrimary = Color(0xFFFFB4AB)
 
-private val md_theme_dark_primary = Color(0xFFFFB4AB)
-private val md_theme_dark_onPrimary = Color(0xFF690005)
-private val md_theme_dark_primaryContainer = Color(0xFF93000A)
-private val md_theme_dark_onPrimaryContainer = Color(0xFFFFDAD6)
-private val md_theme_dark_secondary = Color(0xFFE7BDB7)
-private val md_theme_dark_onSecondary = Color(0xFF442926)
-private val md_theme_dark_secondaryContainer = Color(0xFF5D3F3B)
-private val md_theme_dark_onSecondaryContainer = Color(0xFFFFDAD6)
-private val md_theme_dark_tertiary = Color(0xFFE0C2A6)
-private val md_theme_dark_onTertiary = Color(0xFF3F2E04)
-private val md_theme_dark_tertiaryContainer = Color(0xFF574419)
-private val md_theme_dark_onTertiaryContainer = Color(0xFFFFDDB3)
-private val md_theme_dark_error = Color(0xFFFFB4AB)
+private val md_theme_light_background = Color(0xFFFFFBFA)
+private val md_theme_light_onBackground = Color(0xFF1C1C1C)
+
+private val md_theme_light_surface = Color(0xFFFFFFFF)
+private val md_theme_light_onSurface = Color(0xFF1C1C1C)
+
+private val md_theme_light_surfaceVariant = Color(0xFFF5F5F5)
+private val md_theme_light_onSurfaceVariant = Color(0xFF1E1F22)
+
+private val md_theme_light_outline = Color(0xFF1E1F22)
+private val md_theme_light_inverseOnSurface = Color(0xFFF5F5F5)
+private val md_theme_light_inverseSurface = Color(0xFF212121)
+private val md_theme_light_inversePrimary = Color(0xFFFF8A80)
+
+//MODO OSCURO
+private val md_theme_dark_primary = Color(0xFFE13832)
+private val md_theme_dark_onPrimary = Color(0xFF400000)
+private val md_theme_dark_primaryContainer = Color(0xFF8B0000)
+private val md_theme_dark_onPrimaryContainer = Color(0xFFFFB3B3)
+
+private val md_theme_dark_secondary = Color(0xFFBDBDBD)
+private val md_theme_dark_onSecondary = Color(0xFF212121)
+private val md_theme_dark_secondaryContainer = Color(0xFF424242)
+private val md_theme_dark_onSecondaryContainer = Color(0xFFE0E0E0)
+
+private val md_theme_dark_tertiary = Color(0xFFFFD54F)
+private val md_theme_dark_onTertiary = Color(0xFF3E2723)
+private val md_theme_dark_tertiaryContainer = Color(0xFF5D4037)
+private val md_theme_dark_onTertiaryContainer = Color(0xFFFFF8E1)
+
+private val md_theme_dark_error = Color(0xFFFF6F61)
 private val md_theme_dark_errorContainer = Color(0xFF93000A)
-private val md_theme_dark_onError = Color(0xFF690005)
+private val md_theme_dark_onError = Color(0xFFFFFFFF)
 private val md_theme_dark_onErrorContainer = Color(0xFFFFDAD6)
-private val md_theme_dark_background = Color(0xFF201A19)
-private val md_theme_dark_onBackground = Color(0xFFEDE0DE)
-private val md_theme_dark_surface = Color(0xFF201A19)
-private val md_theme_dark_onSurface = Color(0xFFEDE0DE)
-private val md_theme_dark_surfaceVariant = Color(0xFF534341)
-private val md_theme_dark_onSurfaceVariant = Color(0xFFD8C2BF)
-private val md_theme_dark_outline = Color(0xFFA08C89)
-private val md_theme_dark_inverseOnSurface = Color(0xFF201A19)
-private val md_theme_dark_inverseSurface = Color(0xFFEDE0DE)
-private val md_theme_dark_inversePrimary = Color(0xFFD32F2F)
+
+private val md_theme_dark_background = Color(0xFF121212)
+private val md_theme_dark_onBackground = Color(0xFFEDEDED)
+
+private val md_theme_dark_surface = Color(0xFF1E1E1E)
+private val md_theme_dark_onSurface = Color(0xFFEDEDED)
+
+private val md_theme_dark_surfaceVariant = Color(0xFF3E3E3E)
+private val md_theme_dark_onSurfaceVariant = Color(0xFFCCCCCC)
+
+private val md_theme_dark_outline = Color(0xFF8D8D8D)
+private val md_theme_dark_inverseOnSurface = Color(0xFF1E1E1E)
+private val md_theme_dark_inverseSurface = Color(0xFFE0E0E0)
+private val md_theme_dark_inversePrimary = Color(0xFFD50000)
+
 
 private val LightColors = lightColorScheme(
     primary = md_theme_light_primary,
@@ -132,7 +148,7 @@ private val DarkColors = darkColorScheme(
 fun PanicShieldTheme(
       darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -148,9 +164,22 @@ fun PanicShieldTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+
+            // Colores que quieres usar para las barras
+            val systemBarsColor = colorScheme.background.toArgb() // puedes cambiarlo
+
+            // Cambia status bar
+            window.statusBarColor = systemBarsColor
+            // Cambia navigation bar
+            window.navigationBarColor = systemBarsColor
+
+            // Controla el color de los íconos en ambas barras
+            val insetsController = WindowCompat.getInsetsController(window, view)
+            val useDarkIcons = !darkTheme
+            insetsController.isAppearanceLightStatusBars = useDarkIcons
+            insetsController.isAppearanceLightNavigationBars = useDarkIcons
         }
+
     }
 
     MaterialTheme(

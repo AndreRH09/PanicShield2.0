@@ -34,61 +34,44 @@ fun HistoryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // ✅ Cargar historial al iniciar
     LaunchedEffect(Unit) {
         viewModel.loadEmergencyHistory()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Historial",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
-                ),
-                navigationIcon = {
-                    IconButton(onClick = { /* TODO: Menu */ }) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu",
-                            tint = Color.White
-                        )
-                    }
-                }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        if (uiState.selectedEmergency != null) {
+            EmergencyDetailsView(
+                emergency = uiState.selectedEmergency!!,
+                onBackClick = { viewModel.clearSelectedEmergency() },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            HistoryListView(
+                uiState = uiState,
+                onEmergencyClick = { emergency -> viewModel.selectEmergency(emergency) },
+                onFilterChange = { filter -> viewModel.setTimeFilter(filter) },
+                onSearchChange = { query -> viewModel.setSearchQuery(query) },
+                onRefresh = { viewModel.loadEmergencyHistory() },
+                modifier = Modifier.fillMaxSize()
             )
         }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(Color(0xFFF5F5F5))
-        ) {
-            if (uiState.selectedEmergency != null) {
-                // ✅ VISTA DETALLES
-                EmergencyDetailsView(
-                    emergency = uiState.selectedEmergency!!,
-                    onBackClick = { viewModel.clearSelectedEmergency() },
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                // ✅ VISTA LISTA HISTORIAL
-                HistoryListView(
-                    uiState = uiState,
-                    onEmergencyClick = { emergency -> viewModel.selectEmergency(emergency) },
-                    onFilterChange = { filter -> viewModel.setTimeFilter(filter) },
-                    onSearchChange = { query -> viewModel.setSearchQuery(query) },
-                    onRefresh = { viewModel.loadEmergencyHistory() },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+    }
+}
+@Composable
+fun getDetailCardColor(status: EmergencyStatus, priority: String?): Color {
+    return when {
+        status == EmergencyStatus.CANCELLED -> Color(0xFF757575)    // ✅ CANCELLED = GRIS SIEMPRE
+        !priority.isNullOrBlank() -> getPriorityColor(priority)      // ✅ LUEGO PRIORIDAD
+        else -> when (status) {                                      // ✅ FINALMENTE ESTADO
+            EmergencyStatus.ACTIVE -> Color(0xFFE53935)
+            EmergencyStatus.COMPLETED -> Color(0xFF4CAF50)
+            EmergencyStatus.PENDING -> Color(0xFFFF9800)
+            EmergencyStatus.CANCELLING -> Color(0xFF9C27B0)
+            else -> Color(0xFF757575)
         }
     }
 }
@@ -102,6 +85,8 @@ fun HistoryListView(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = MaterialTheme.colorScheme
+
     Column(modifier = modifier) {
         // ✅ BARRA DE BÚSQUEDA
         SearchBar(
@@ -131,7 +116,7 @@ fun HistoryListView(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
-                        color = Color(0xFFE53935)
+                        color = colors.primary // Usa el color primario del tema
                     )
                 }
             }
@@ -159,7 +144,7 @@ fun HistoryListView(
                     .fillMaxWidth()
                     .padding(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFFFEBEE)
+                    containerColor = colors.errorContainer // ✅ USAR COLOR DE ERROR NORMAL
                 )
             ) {
                 Row(
@@ -169,12 +154,12 @@ fun HistoryListView(
                     Icon(
                         imageVector = Icons.Default.Error,
                         contentDescription = "Error",
-                        tint = Color(0xFFE53935)
+                        tint = colors.error
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = error,
-                        color = Color(0xFFE53935),
+                        color = colors.error,
                         fontSize = 14.sp
                     )
                 }
@@ -182,6 +167,7 @@ fun HistoryListView(
         }
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -198,7 +184,7 @@ fun SearchBar(
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Buscar",
-                tint = Color.Gray
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         trailingIcon = {
@@ -207,7 +193,7 @@ fun SearchBar(
                     Icon(
                         imageVector = Icons.Default.Clear,
                         contentDescription = "Limpiar",
-                        tint = Color.Gray
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -217,10 +203,19 @@ fun SearchBar(
         colors = TextFieldDefaults.outlinedTextFieldColors(
             focusedBorderColor = Color.Transparent,
             unfocusedBorderColor = Color.Transparent,
-            containerColor = Color.White
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         singleLine = true
     )
+}
+// 1. FUNCIÓN NUEVA: Obtener color según prioridad
+@Composable
+fun getPriorityColor(priority: String?): Color {
+    return when (priority?.uppercase()) {
+        "CRITICAL" -> Color(0xFFE53935) // Rojo para crítica
+        "HIGH" -> Color(0xFFFFC107)     // Amarillo para moderada/alta
+        else -> Color(0xFF9E9E9E)       // Gris para otros casos
+    }
 }
 
 @Composable
@@ -234,8 +229,10 @@ fun TimeFilterRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         HistoryTimeFilter.values().forEach { filter ->
+            val isSelected = selectedFilter == filter
+
             FilterChip(
-                selected = selectedFilter == filter,
+                selected = isSelected,
                 onClick = { onFilterChange(filter) },
                 label = {
                     Text(
@@ -244,10 +241,10 @@ fun TimeFilterRow(
                     )
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFF2196F3),
-                    selectedLabelColor = Color.White,
-                    containerColor = Color.White,
-                    labelColor = Color.Black
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    labelColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
@@ -277,7 +274,7 @@ fun HistoryListContent(
                     text = period,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
@@ -307,11 +304,13 @@ fun EmergencyHistoryItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+
     Card(
         modifier = modifier
             .clickable { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = Color.White
+            containerColor = colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 2.dp
@@ -327,6 +326,7 @@ fun EmergencyHistoryItem(
             // ✅ ICONO DE ESTADO
             EmergencyStatusIcon(
                 status = emergency.status,
+                priority = emergency.priority,
                 modifier = Modifier.size(40.dp)
             )
 
@@ -340,29 +340,29 @@ fun EmergencyHistoryItem(
                     text = formatDate(emergency.createdAt),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.Black
+                    color = colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = emergency.emergencyType.replace("_", " ").uppercase(),
+                    text = "ALARMA ${getPriorityDisplayText(emergency.priority)}",
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = getPriorityColor(emergency.priority),
+                    fontWeight = FontWeight.Bold
                 )
 
                 Text(
                     text = formatTime(emergency.createdAt),
                     fontSize = 12.sp,
-                    color = Color.Gray
+                    color = colorScheme.onSurfaceVariant
                 )
 
-                // Mostrar dirección si está disponible
                 emergency.address?.let { address ->
                     Text(
                         text = address,
                         fontSize = 11.sp,
-                        color = Color.Gray,
+                        color = colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -373,25 +373,50 @@ fun EmergencyHistoryItem(
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = "Ver detalles",
-                tint = Color.Gray,
+                tint = colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
+fun getPriorityDisplayText(priority: String?): String {
+    return when (priority?.uppercase()) {
+        "CRITICAL" -> "CRÍTICA"
+        "HIGH" -> "MODERADA"
+        "MEDIUM" -> "MEDIA"
+        "LOW" -> "BAJA"
+        else -> "NORMAL"
+    }
+}
 @Composable
 fun EmergencyStatusIcon(
+    modifier: Modifier = Modifier,
     status: EmergencyStatus,
-    modifier: Modifier = Modifier
+    priority: String? = null // ✅ NUEVO PARÁMETRO
 ) {
-    val (icon, color) = when (status) {
-        EmergencyStatus.ACTIVE -> Icons.Default.Warning to Color(0xFFE53935)
-        EmergencyStatus.COMPLETED -> Icons.Default.CheckCircle to Color(0xFF4CAF50)
-        EmergencyStatus.CANCELLED -> Icons.Default.Cancel to Color(0xFF757575)
-        EmergencyStatus.PENDING -> Icons.Default.Schedule to Color(0xFFFF9800)
-        EmergencyStatus.CANCELLING -> Icons.Default.HourglassEmpty to Color(0xFFFF5722)
-        else -> Icons.Default.Info to Color(0xFF2196F3)
+    val colorScheme = MaterialTheme.colorScheme
+
+    // ✅ JERARQUÍA: CANCELLED SIEMPRE GRIS, LUEGO PRIORIDAD
+    val color = when {
+        status == EmergencyStatus.CANCELLED -> colorScheme.outline // ✅ CANCELLED = GRIS SIEMPRE
+        !priority.isNullOrBlank() -> getPriorityColor(priority)     // ✅ LUEGO PRIORIDAD
+        else -> when (status) {                                     // ✅ FINALMENTE ESTADO
+            EmergencyStatus.ACTIVE -> colorScheme.error
+            EmergencyStatus.COMPLETED -> colorScheme.primary
+            EmergencyStatus.PENDING -> colorScheme.tertiary
+            EmergencyStatus.CANCELLING -> colorScheme.secondary
+            else -> colorScheme.inversePrimary
+        }
+    }
+
+    val icon = when (status) {
+        EmergencyStatus.ACTIVE -> Icons.Default.Warning
+        EmergencyStatus.COMPLETED -> Icons.Default.CheckCircle
+        EmergencyStatus.CANCELLED -> Icons.Default.Cancel
+        EmergencyStatus.PENDING -> Icons.Default.Schedule
+        EmergencyStatus.CANCELLING -> Icons.Default.HourglassEmpty
+        else -> Icons.Default.Info
     }
 
     Box(
@@ -410,6 +435,7 @@ fun EmergencyStatusIcon(
         )
     }
 }
+
 
 @Composable
 fun EmptyHistoryState(
@@ -510,12 +536,7 @@ fun EmergencyDetailsView(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = when (emergency.status) {
-                    EmergencyStatus.ACTIVE -> Color(0xFFE53935)
-                    EmergencyStatus.COMPLETED -> Color(0xFF4CAF50)
-                    EmergencyStatus.CANCELLED -> Color(0xFF757575)
-                    else -> Color(0xFFFF9800)
-                }
+                containerColor = getDetailCardColor(emergency.status, emergency.priority) // ✅ USAR JERARQUÍA CORRECTA
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -554,7 +575,7 @@ fun EmergencyDetailsView(
                 // ✅ INFORMACIÓN DE LA EMERGENCIA
                 EmergencyDetailRow(
                     label = "Tipo de alarma",
-                    value = emergency.emergencyType.replace("_", " ").uppercase()
+                    value = emergency.priority?.uppercase() ?: "NORMAL" // ✅ MOSTRAR PRIORIDAD
                 )
 
                 EmergencyDetailRow(
@@ -562,10 +583,6 @@ fun EmergencyDetailsView(
                     value = formatDetailTime(emergency.createdAt)
                 )
 
-                EmergencyDetailRow(
-                    label = "Ubicación",
-                    value = emergency.address ?: "Ubicación no disponible"
-                )
 
                 EmergencyDetailRow(
                     label = "Estado",

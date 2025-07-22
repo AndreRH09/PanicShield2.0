@@ -76,6 +76,13 @@ dependencies {
 
     // Navigation
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.mediation.test.suite)
+    implementation(libs.androidx.media3.common.ktx)
+    implementation(libs.androidx.foundation.android)
+    implementation(libs.androidx.foundation.android)
+    implementation(libs.androidx.preference.ktx)
+    implementation(libs.androidx.foundation.android)
+    implementation(libs.androidx.foundation.android)
 
     // Testing
     testImplementation(libs.junit)
@@ -170,4 +177,12 @@ dependencies {
             strictly("1.5.1")
         }
     }
+
+    // MQTT Client
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+    implementation("org.eclipse.paho:org.eclipse.paho.android.service:1.1.1")
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0") // o la última versión
 }

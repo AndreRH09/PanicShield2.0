@@ -27,6 +27,7 @@ import com.example.panicshield.domain.model.EmergencyStatus
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -37,96 +38,69 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val locationInfo by viewModel.locationInfo.collectAsStateWithLifecycle()
+    val panicState by viewModel.panicState.collectAsStateWithLifecycle()
 
     val permissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
     var requestedPermission by rememberSaveable { mutableStateOf(false) }
 
-    // ✅ Observar cambios de conectividad en tiempo real
     LaunchedEffect(Unit) {
         if (!permissionState.status.isGranted && !requestedPermission) {
             permissionState.launchPermissionRequest()
             requestedPermission = true
         }
-        // viewModel.startConnectivityMonitoring()
     }
+
     LaunchedEffect(permissionState.status.isGranted) {
         if (permissionState.status.isGranted) {
-            viewModel.refreshLocation()  // Llama a tu función que actualiza la ubicación
+            viewModel.refreshLocation()
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Botón de Emergencia",
-                        color = Color.White
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
-                ),
-                navigationIcon = {
-                    IconButton(onClick = { /* TODO: Menu */ }) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu",
-                            tint = Color.White
-                        )
-                    }
+    // ✅ Solo contenido, sin Scaffold ni Drawer
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+
+        ConnectionStatusIndicator(
+            connectionStatus = uiState.connectionStatus,
+            onRetry = { viewModel.retryConnection() }
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        EmergencyButton(
+            isActivated = uiState.isPanicActivated,
+            isLoading = uiState.isLoading || panicState is HomeViewModel.PanicState.Sending,
+            emergencyStatus = uiState.emergencyStatus,
+            onClick = {
+                if (uiState.isPanicActivated) {
+                    viewModel.togglePanicButton()
+                } else {
+                    viewModel.activatePanicWithAlert()
                 }
-            )
-        },
+            }
+        )
 
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(Color(0xFFF5F5F5)),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-            // ✅ INDICADOR DE CONEXIÓN CON SUSPEND
-            ConnectionStatusIndicator(
-                connectionStatus = uiState.connectionStatus,
-                onRetry = { viewModel.retryConnection() }
-            )
+        StatusText(emergencyStatus = uiState.emergencyStatus)
 
-            Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.weight(1f))
 
-            // ✅ BOTÓN DE EMERGENCIA
-            EmergencyButton(
-                isActivated = uiState.isPanicActivated,
-                isLoading = uiState.isLoading,
-                emergencyStatus = uiState.emergencyStatus,
-                onClick = { viewModel.togglePanicButton() }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ✅ TEXTO DE ESTADO
-            StatusText(emergencyStatus = uiState.emergencyStatus)
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // ✅ CARD DE INFORMACIÓN DE UBICACIÓN
-            LocationInfoCard(
-                locationInfo = locationInfo,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 16.dp)
-            )
-        }
+        LocationInfoCard(
+            locationInfo = locationInfo,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 
-    // ✅ MANEJO DE ERRORES
     uiState.errorMessage?.let { errorMessage ->
         LaunchedEffect(errorMessage) {
-            // TODO: Mostrar SnackBar o Dialog con error
+            // TODO: Mostrar SnackBar o Dialog
         }
     }
 }
@@ -231,7 +205,7 @@ fun EmergencyButton(
             .background(buttonColor)
             .border(
                 width = 4.dp,
-                color = buttonColor.copy(alpha = 0.3f),
+                color = MaterialTheme.colorScheme.onBackground,
                 shape = CircleShape
             )
             .clickable(enabled = !isLoading) { onClick() },
@@ -281,7 +255,7 @@ fun StatusText(emergencyStatus: EmergencyStatus) {
             text = statusText,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
 
@@ -304,7 +278,7 @@ fun LocationInfoCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = Color.White
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 4.dp
@@ -328,7 +302,7 @@ fun LocationInfoCard(
                     Icon(
                         imageVector = Icons.Default.LocationOn,
                         contentDescription = "Ubicación",
-                        tint = Color(0xFF2196F3),
+                        tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -336,7 +310,7 @@ fun LocationInfoCard(
                         text = "Información de Ubicación",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -364,10 +338,6 @@ fun LocationInfoCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-
-
-                Spacer(modifier = Modifier.height(8.dp))
-
                 LocationInfoRow(
                     icon = Icons.Default.Schedule,
                     label = "Actualizado:",
@@ -382,20 +352,20 @@ fun LocationInfoCard(
                     Icon(
                         imageVector = Icons.Default.LocationDisabled,
                         contentDescription = "Sin ubicación",
-                        tint = Color.Gray,
+                        tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(48.dp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Ubicación no disponible",
                         fontSize = 14.sp,
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onBackground,
                         textAlign = TextAlign.Center
                     )
                     Text(
                         text = "Verifica los permisos de ubicación",
                         fontSize = 12.sp,
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onBackground,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -451,19 +421,17 @@ fun LocationInfoRow(
         Text(
             text = label,
             fontSize = 13.sp,
-            color = Color(0xFF757575),
+            color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.width(80.dp)
         )
         Text(
             text = value,
             fontSize = 13.sp,
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f)
         )
     }
 }
-
-
 
 // ✅ FUNCIÓN HELPER PARA FORMATEAR TIMESTAMP
 private fun formatTimestamp(timestamp: Long): String {
