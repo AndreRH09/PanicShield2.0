@@ -198,22 +198,39 @@ class HomeViewModel @Inject constructor(
     private fun evaluateTapsAndCreateEmergency(tapCount: Int, settings: AlertSettings) {
         Log.d("HomeViewModel", "🎯 Evaluando $tapCount toques (Moderado: ${settings.moderateAlertTaps}, Severo: ${settings.severeAlertTaps})")
 
-        val priority = when {
+        when {
             tapCount >= settings.severeAlertTaps -> {
                 Log.d("HomeViewModel", "🚨 ALERTA SEVERA activada con $tapCount toques")
-                "CRITICAL"
+                activateEmergencyWithPriority("CRITICAL")
             }
             tapCount >= settings.moderateAlertTaps -> {
                 Log.d("HomeViewModel", "⚠️ ALERTA MODERADA activada con $tapCount toques")
-                "HIGH"
+                activateEmergencyWithPriority("HIGH")
             }
             else -> {
-                Log.d("HomeViewModel", "📱 Insuficientes toques ($tapCount), creando emergencia normal")
-                "HIGH" // Por defecto
+                Log.d("HomeViewModel", "❌ Insuficientes toques ($tapCount). Mínimo requerido: ${settings.moderateAlertTaps}. NO se enviará alarma.")
+                // ✅ NO hacer nada - no se crea emergencia
+                showInsufficientTapsMessage(tapCount, settings.moderateAlertTaps)
+            }
+        }
+    }
+
+    private fun showInsufficientTapsMessage(actualTaps: Int, requiredTaps: Int) {
+        val message = "Se necesitan al menos $requiredTaps toques para activar una emergencia. Detectados: $actualTaps"
+
+        _uiState.value = _uiState.value.copy(
+            errorMessage = message
+        )
+
+        // Limpiar el mensaje después de 3 segundos
+        viewModelScope.launch {
+            delay(3000)
+            if (_uiState.value.errorMessage == message) {
+                _uiState.value = _uiState.value.copy(errorMessage = null)
             }
         }
 
-        activateEmergencyWithPriority(priority)
+        Log.i("HomeViewModel", "💡 Mensaje mostrado al usuario: $message")
     }
 
     private fun activateEmergencyWithPriority(priority: String) {
