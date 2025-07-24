@@ -51,34 +51,26 @@ PanicShield 2.0 sigue una arquitectura moderna basada en principios de limpieza,
 - Navigation Component: Maneja la navegación entre pantallas mediante rutas definidas en una estructura centralizada.
 
 2. Domain Layer (Opcional/Futura)
-Actualmente acoplado a la capa de presentación, pero pensado para evolucionar hacia una capa de dominio limpia que contenga lógica empresarial desacoplada.
+- Actualmente acoplado a la capa de presentación, pero pensado para evolucionar hacia una capa de dominio limpia que contenga lógica empresarial desacoplada.
 
 3. Data Layer
-Room + DAO: Base de datos local para gestionar contactos de emergencia y configuraciones persistentes.
-
-DataStore: Utilizado para almacenar preferencias y configuraciones como envío de SMS, ubicación, y prioridades.
-
-BLE (Bluetooth Low Energy): Módulo específico para escaneo y transmisión de señales tipo iBeacon codificando datos críticos como temperatura y humedad.
+- Room + DAO: Base de datos local para gestionar contactos de emergencia y configuraciones persistentes.
+- DataStore: Utilizado para almacenar preferencias y configuraciones como envío de SMS, ubicación, y prioridades.
+- BLE (Bluetooth Low Energy): Módulo específico para escaneo y transmisión de señales tipo iBeacon codificando datos críticos como temperatura y humedad.
 
 4. ViewModel Layer
-AndroidViewModel + StateFlow: Cada ViewModel encapsula y expone los datos con StateFlow, brindando un flujo reactivo hacia la UI.
-
-Contiene lógica de presentación y coordina acciones entre la UI, repositorios y almacenamiento local.
+- AndroidViewModel + StateFlow: Cada ViewModel encapsula y expone los datos con StateFlow, brindando un flujo reactivo hacia la UI.
+- Contiene lógica de presentación y coordina acciones entre la UI, repositorios y almacenamiento local.
 
 5. Dependency Injection
-Hilt: Utilizado para la inyección de dependencias en ViewModels, Repositorios, DAOs y otras clases. Permite mantener el código desacoplado y facilita pruebas unitarias.
+- Hilt: Utilizado para la inyección de dependencias en ViewModels, Repositorios, DAOs y otras clases. Permite mantener el código desacoplado y facilita pruebas unitarias.
 
 6. Sensor y Comunicación
-BLE Transmitter/Scanner: Integración de sensores simulados de temperatura y humedad mediante BluetoothLeAdvertiser y BluetoothLeScanner.
-
-iBeacon protocol: Los datos se codifican en los campos Major y Minor de un paquete iBeacon para garantizar compatibilidad y simplicidad en el escaneo.
-
-Permisos Dinámicos: Gestión segura de permisos de Bluetooth, ubicación y SMS.
+- Permisos Dinámicos: Gestión segura de permisos de Bluetooth, ubicación y SMS.
 
 7. SMS y Alertas
-Módulo de Configuración Dinámica: Permite al usuario activar/desactivar opciones de envío como: ubicación, teléfono, prioridad, etc.
-
-Sistema de Toques: El botón de pánico se activa con múltiples toques en pantalla, configurable en la sección de ajustes.
+- Módulo de Configuración Dinámica: Permite al usuario activar/desactivar opciones de envío como: ubicación, teléfono, prioridad, etc.
+- Sistema de Toques: El botón de pánico se activa con múltiples toques en pantalla, configurable en la sección de ajustes.
 
 
 ---
